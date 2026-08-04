@@ -1,0 +1,1138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Оператор ДЧ</title>
+<style>
+  :root {
+    --accent:       #C9773D;
+    --accent-light: #E8A87C;
+    --bg:           #14161f;
+    --bg-card:      #1E2030;
+    --bg-section:   #1a1c2b;
+    --text:         #F2EEE6;
+    --text-muted:   #9DA3B4;
+    --success:      #5aab6c;
+    --warn:         #d4a017;
+    --danger:       #e05c5c;
+    --radius:       12px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: Manrope, system-ui, sans-serif;
+    font-size: 16px; min-height: 100dvh;
+    padding: 0 0 5rem;
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────────────── */
+  .header {
+    background: var(--bg-card);
+    border-bottom: 1px solid rgba(201,119,61,0.18);
+    padding: 0.85rem 1.2rem;
+    display: flex; align-items: center; gap: 0.7rem;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-title { flex: 1; min-width: 0; }
+  .header-title h1 { font-size: 1rem; font-weight: 700; color: var(--accent); }
+  .header-title .week { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+  .save-ind {
+    display: flex; align-items: center; gap: 0.35rem;
+    font-size: 0.72rem; color: var(--text-muted); transition: color 0.3s; white-space: nowrap;
+  }
+  .save-ind.saving { color: var(--accent-light); }
+  .save-ind.saved  { color: var(--success); }
+  .save-ind.error  { color: var(--danger); }
+  .lock-icon { font-size: 1rem; opacity: 0.55; flex-shrink: 0; }
+
+  /* ── Sections ────────────────────────────────────────────────────────────── */
+  .section { margin: 1rem 0.8rem; border-radius: var(--radius); overflow: hidden; }
+
+  .section-head {
+    background: var(--bg-section);
+    padding: 0.85rem 1rem;
+    display: flex; align-items: center; gap: 0.6rem;
+    cursor: pointer; user-select: none;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: var(--radius); transition: background 0.15s;
+  }
+  .section-head.open { border-radius: var(--radius) var(--radius) 0 0; border-bottom: none; }
+  .section-head h2 { flex: 1; font-size: 0.9rem; font-weight: 600; }
+  .badge-ok {
+    font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.15rem 0.5rem; border-radius: 20px;
+    background: rgba(90,171,108,0.15); color: var(--success);
+    border: 1px solid rgba(90,171,108,0.3);
+  }
+  .sec-meta { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8rem; }
+  .chevron { color: var(--text-muted); font-size: 0.8rem; transition: transform 0.2s; flex-shrink: 0; }
+  .section-head.open .chevron { transform: rotate(180deg); }
+
+  .section-body {
+    background: var(--bg-section);
+    border: 1px solid rgba(255,255,255,0.06); border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    padding: 1rem 1rem 0.8rem;
+  }
+  .section-body.hidden { display: none; }
+
+  .section-yours .section-head { border-color: rgba(201,119,61,0.35); }
+  .section-yours .section-body { border-color: rgba(201,119,61,0.35); }
+
+  /* ── Sub-sections ────────────────────────────────────────────────────────── */
+  .sub-sep { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 1.1rem 0; }
+
+  .sub-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.7rem; }
+  .sub-label {
+    flex: 1; font-size: 0.68rem; color: var(--text-muted); font-weight: 600;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .btn-reset {
+    background: none; border: 1px solid rgba(201,119,61,0.2);
+    border-radius: 6px; color: var(--text-muted); font-size: 0.65rem;
+    cursor: pointer; padding: 0.2rem 0.5rem; font-family: inherit;
+  }
+  .btn-reset:active { opacity: 0.6; }
+
+  /* ── Badges ──────────────────────────────────────────────────────────────── */
+  .badge {
+    font-size: 0.58rem; padding: 0.1rem 0.4rem; border-radius: 4px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .badge-src  { background: rgba(100,160,220,0.12); color: #78aadd; border: 1px solid rgba(100,160,220,0.22); }
+  .badge-warn { background: rgba(212,160,23,0.14);  color: var(--warn); border: 1px solid rgba(212,160,23,0.28); }
+  .badge-new  { background: rgba(90,171,108,0.12); color: var(--success); border: 1px solid rgba(90,171,108,0.25); }
+
+  /* ── Program editor ──────────────────────────────────────────────────────── */
+  .prog-list { display: flex; flex-direction: column; gap: 0.45rem; }
+
+  .prog-item {
+    background: var(--bg); border: 1px solid rgba(201,119,61,0.14);
+    border-radius: 8px;
+  }
+  .prog-item.uncertain { border-color: rgba(212,160,23,0.4); background: rgba(212,160,23,0.04); }
+  .prog-item.drag-over { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .prog-item.dragging  { opacity: 0.35; }
+
+  .prog-inner { display: flex; align-items: flex-start; }
+  .grip {
+    padding: 0.65rem 0.5rem; color: var(--text-muted);
+    cursor: grab; font-size: 1rem; opacity: 0.45;
+    touch-action: none; flex-shrink: 0;
+  }
+  .grip:active { cursor: grabbing; opacity: 0.8; }
+  .prog-body { flex: 1; padding: 0.5rem 0.7rem 0.5rem 0; min-width: 0; }
+
+  .prog-r1 { display: flex; align-items: center; gap: 0.4rem; }
+  .prog-time {
+    width: 4.7rem; flex-shrink: 0;
+    background: transparent; border: 1px solid rgba(201,119,61,0.22);
+    border-radius: 5px; color: var(--accent); font-weight: 600;
+    font-family: inherit; font-size: 0.85rem;
+    padding: 0.25rem 0.4rem; text-align: center; outline: none;
+  }
+  .prog-time:focus { border-color: var(--accent); }
+  .prog-title {
+    flex: 1; min-width: 0;
+    background: transparent; border: 1px solid transparent;
+    border-radius: 5px; color: var(--text);
+    font-family: inherit; font-size: 0.85rem;
+    padding: 0.25rem 0.4rem; outline: none;
+  }
+  .prog-title:focus { border-color: rgba(201,119,61,0.3); background: rgba(201,119,61,0.04); }
+  .btn-del {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 0.9rem; cursor: pointer; padding: 0.2rem 0.3rem; flex-shrink: 0; opacity: 0.5;
+  }
+  .btn-del:hover { color: var(--danger); opacity: 1; }
+
+  .prog-r2 { margin-top: 0.3rem; }
+  .prog-note {
+    width: 100%;
+    background: transparent; border: 1px solid transparent;
+    border-radius: 5px; color: var(--text-muted); font-style: italic;
+    font-family: inherit; font-size: 0.75rem;
+    padding: 0.2rem 0.4rem; outline: none;
+  }
+  .prog-note::placeholder { color: rgba(157,163,180,0.35); }
+  .prog-note:focus { border-color: rgba(201,119,61,0.2); }
+
+  .prog-r3 { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.3rem; flex-wrap: wrap; }
+  .radio-lbl {
+    display: flex; align-items: center; gap: 0.3rem;
+    font-size: 0.67rem; color: var(--text-muted); cursor: pointer; white-space: nowrap;
+  }
+  .radio-lbl input[type=radio] { accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer; }
+  .radio-lbl.is-end { color: var(--accent-light); font-weight: 600; }
+  .llm-note { font-size: 0.63rem; color: var(--warn); }
+
+  .btn-add-prog {
+    width: 100%; margin-top: 0.55rem;
+    background: none; border: 1px dashed rgba(201,119,61,0.28);
+    border-radius: 8px; color: var(--text-muted);
+    font-size: 0.8rem; font-family: inherit; padding: 0.5rem;
+    cursor: pointer; transition: border-color 0.15s, color 0.15s;
+  }
+  .btn-add-prog:hover { border-color: var(--accent); color: var(--accent-light); }
+
+  /* ── News editor ─────────────────────────────────────────────────────────── */
+  .news-list { display: flex; flex-direction: column; gap: 0.4rem; }
+
+  .news-item {
+    background: var(--bg); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    display: flex; align-items: center; gap: 0.2rem;
+    padding-right: 0.35rem;
+  }
+  .news-item.is-manual { border-color: rgba(90,171,108,0.2); }
+  .news-item.drag-over  { border-color: var(--accent); }
+  .news-item.dragging   { opacity: 0.35; }
+
+  .news-inp {
+    flex: 1; min-width: 0;
+    background: transparent; border: none;
+    color: var(--text); font-family: inherit; font-size: 0.82rem;
+    padding: 0.5rem 0.35rem; outline: none;
+  }
+  .news-inp:focus { background: rgba(201,119,61,0.03); border-radius: 4px; }
+
+  .btn-add-news {
+    width: 100%; margin-top: 0.5rem;
+    background: none; border: 1px dashed rgba(90,171,108,0.3);
+    border-radius: 8px; color: var(--success);
+    font-size: 0.78rem; font-family: inherit; padding: 0.45rem;
+    cursor: pointer; transition: border-color 0.15s;
+  }
+  .btn-add-news:hover { border-color: var(--success); }
+
+  /* ── Dada ────────────────────────────────────────────────────────────────── */
+  .dada-auto {
+    font-size: 0.74rem; color: var(--text-muted); font-style: italic;
+    border-left: 2px solid rgba(201,119,61,0.2);
+    padding: 0.3rem 0.6rem; margin-bottom: 0.5rem;
+    background: rgba(255,255,255,0.02); border-radius: 0 4px 4px 0;
+  }
+  .dada-wrap { display: flex; gap: 0.5rem; align-items: flex-start; }
+  .dada-wrap textarea {
+    flex: 1; background: var(--bg); border: 1px solid rgba(201,119,61,0.22);
+    border-radius: 8px; color: var(--text); font-family: inherit; font-size: 0.82rem;
+    padding: 0.5rem 0.7rem; outline: none; resize: vertical; min-height: 52px;
+  }
+  .dada-wrap textarea:focus { border-color: var(--accent); }
+  .btn-reset-sm {
+    background: none; border: 1px solid rgba(201,119,61,0.2);
+    border-radius: 6px; color: var(--text-muted); font-size: 0.65rem;
+    cursor: pointer; padding: 0.25rem 0.45rem; white-space: nowrap;
+    font-family: inherit; align-self: flex-start;
+  }
+
+  /* ── Готово ──────────────────────────────────────────────────────────────── */
+  .btn-done {
+    width: 100%; margin-top: 1.2rem;
+    background: var(--bg-card); border: 1px solid rgba(201,119,61,0.25);
+    border-radius: var(--radius); color: var(--text-muted);
+    font-family: inherit; font-size: 0.88rem; padding: 0.65rem;
+    cursor: pointer;
+  }
+  .btn-done:active { background: rgba(201,119,61,0.08); }
+
+  /* ── Твоя часть: fields ──────────────────────────────────────────────────── */
+  .flabel {
+    display: block; font-size: 0.78rem; color: var(--text-muted); margin: 1rem 0 0.3rem;
+  }
+  .flabel:first-child { margin-top: 0; }
+  input[type=text], input[type=url], input[type=number] {
+    width: 100%; background: var(--bg); border: 1px solid rgba(201,119,61,0.25);
+    border-radius: 8px; color: var(--text); font-family: inherit; font-size: 0.92rem;
+    padding: 0.55rem 0.8rem; outline: none; transition: border-color 0.15s;
+  }
+  input:focus { border-color: var(--accent); }
+  .field-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem; font-style: italic; }
+  .auto-video-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
+  .auto-video-row .btn-reset { flex-shrink: 0; }
+  #video-auto-hint a { color: var(--accent-light); text-decoration: none; word-break: break-all; }
+  #video-auto-hint a:hover { text-decoration: underline; }
+
+  /* Song cards */
+  .song-row { display: flex; gap: 0.5rem; margin-bottom: 0.7rem; }
+  .song-row input { flex: 1; }
+  .btn-add-song {
+    background: none; border: 1px dashed rgba(201,119,61,0.4);
+    border-radius: 8px; color: var(--accent-light);
+    font-size: 0.82rem; cursor: pointer; padding: 0.5rem 0.9rem;
+    font-family: inherit; white-space: nowrap;
+  }
+  .song-cards { display: flex; flex-direction: column; gap: 0.5rem; }
+  .song-card {
+    background: var(--bg); border: 1px solid rgba(201,119,61,0.2);
+    border-radius: 8px; padding: 0.55rem 0.75rem;
+    display: flex; align-items: flex-start; gap: 0.6rem;
+  }
+  .song-card.found { border-color: rgba(201,119,61,0.45); }
+  .song-card.stub  { border-color: rgba(220,80,80,0.35); }
+  .song-num  { font-size: 0.7rem; font-weight: 700; color: var(--accent); background: rgba(201,119,61,0.12); border-radius: 4px; padding: 0.15rem 0.4rem; white-space: nowrap; flex-shrink: 0; }
+  .song-text { flex: 1; min-width: 0; }
+  .song-translit { font-size: 0.85rem; font-weight: 600; }
+  .song-transl   { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+  .song-stub-lbl { font-size: 0.82rem; color: var(--danger); }
+  .btn-rm-song { background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 0 0.1rem; align-self: center; flex-shrink: 0; opacity: 0.6; }
+  .btn-rm-song:hover { opacity: 1; color: var(--danger); }
+
+  /* Money */
+  .money-row { display: flex; gap: 0.7rem; }
+  .money-row > div { flex: 1; }
+  .bar-wrap { background: var(--bg-card); border-radius: 4px; height: 8px; margin: 0.6rem 0 0.3rem; overflow: hidden; }
+  .bar-fill { background: var(--accent); height: 100%; transition: width 0.4s; }
+  .bar-lbl  { font-size: 0.72rem; color: var(--text-muted); }
+
+  /* Actions */
+  .actions { margin: 1.2rem 0.8rem 0; display: flex; flex-direction: column; gap: 0.7rem; }
+  .btn-primary {
+    width: 100%; background: var(--accent); color: #fff;
+    border: none; border-radius: var(--radius); font-size: 1rem;
+    font-weight: 700; font-family: inherit; padding: 0.9rem;
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-primary:active { opacity: 0.82; }
+  .btn-secondary {
+    flex: 1; background: var(--bg-card); color: var(--text);
+    border: 1px solid rgba(201,119,61,0.25); border-radius: var(--radius);
+    font-size: 0.88rem; font-family: inherit; padding: 0.65rem;
+    cursor: pointer; text-align: center;
+  }
+  .btn-row { display: flex; gap: 0.7rem; }
+
+  /* ── Song picker (choose from catalog) ─────────────────────────────────────── */
+  .picker-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.55);
+    display: none; align-items: flex-end; justify-content: center;
+  }
+  .picker-overlay.open { display: flex; }
+  .picker {
+    width: 100%; max-width: 640px; max-height: 85dvh;
+    background: var(--bg-card); border: 1px solid rgba(201,119,61,0.3);
+    border-radius: var(--radius) var(--radius) 0 0;
+    display: flex; flex-direction: column;
+    animation: picker-up 0.2s ease;
+  }
+  @keyframes picker-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .picker-head {
+    padding: 0.9rem 1rem 0.7rem; border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; gap: 0.6rem;
+  }
+  .picker-head h3 { flex: 1; font-size: 0.95rem; font-weight: 700; color: var(--accent); }
+  .picker-close { background: none; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; padding: 0 0.2rem; line-height: 1; }
+  .picker-search-wrap { padding: 0.7rem 1rem 0.4rem; }
+  .picker-body { overflow-y: auto; padding: 0.3rem 0.6rem 0.9rem; }
+  .picker-row {
+    display: flex; align-items: center; gap: 0.7rem;
+    padding: 0.55rem 0.6rem; border-radius: 8px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .picker-row:hover { background: rgba(201,119,61,0.08); border-color: rgba(201,119,61,0.25); }
+  .picker-row.added { opacity: 0.4; cursor: default; }
+  .picker-row.added:hover { background: none; border-color: transparent; }
+  .picker-num { font-size: 0.72rem; font-weight: 700; color: var(--accent); background: rgba(201,119,61,0.12); border-radius: 4px; padding: 0.15rem 0.45rem; white-space: nowrap; flex-shrink: 0; min-width: 2.6rem; text-align: center; }
+  .picker-type { flex-shrink: 0; font-size: 0.95rem; line-height: 1; }
+  .picker-text { flex: 1; min-width: 0; }
+  .picker-translit { font-size: 0.86rem; font-weight: 600; }
+  .picker-transl { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
+  .picker-added-lbl { font-size: 0.66rem; color: var(--success); flex-shrink: 0; white-space: nowrap; }
+  .picker-empty { padding: 1.6rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; font-style: italic; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<div class="header">
+  <div class="header-title">
+    <h1>Оператор ДЧ</h1>
+    <div class="week" id="week-label">загрузка…</div>
+  </div>
+  <div class="save-ind" id="save-ind">
+    <span id="save-icon">☁</span>
+    <span id="save-text">авто-сохранение</span>
+  </div>
+  <div class="lock-icon">🔒</div>
+</div>
+
+<!-- ── Собирается само ─────────────────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-head" id="head-auto">
+    <h2>Собирается само</h2>
+    <span class="badge-ok">✓ авто</span>
+    <span class="sec-meta" id="auto-meta"></span>
+    <span class="chevron">▾</span>
+  </div>
+  <div class="section-body hidden" id="body-auto">
+
+    <!-- Программа -->
+    <div class="sub-head">
+      <span class="sub-label">Программа</span>
+      <span class="badge badge-src" id="prog-src-badge">из Telegram</span>
+      <button class="btn-reset" onclick="resetProg()">сбросить к авто</button>
+    </div>
+    <div class="prog-list" id="prog-list"></div>
+    <button class="btn-add-prog" onclick="addProgItem()">+ добавить пункт</button>
+
+    <hr class="sub-sep">
+
+    <!-- Новости -->
+    <div class="sub-head">
+      <span class="sub-label">Новости юнита</span>
+      <span class="badge badge-src" id="news-src-badge">из Airtable</span>
+      <button class="btn-reset" onclick="resetNews()">сбросить к авто</button>
+    </div>
+    <div class="news-list" id="news-list"></div>
+    <button class="btn-add-news" onclick="addManualNews()">+ добавить новость вручную</button>
+
+    <hr class="sub-sep">
+
+    <!-- Дада -->
+    <div class="sub-head">
+      <span class="sub-label">Комментарий Дады</span>
+      <span class="badge badge-src">из manifest</span>
+    </div>
+    <div class="dada-auto" id="dada-auto-val">(нет)</div>
+    <div class="dada-wrap">
+      <textarea id="ov-dada" rows="2" placeholder="Текст или пусто = авто"></textarea>
+      <button class="btn-reset-sm" onclick="resetDada()">↺ авто</button>
+    </div>
+
+    <button class="btn-done" onclick="toggleSection('head-auto','body-auto')">Готово</button>
+  </div>
+</div>
+
+<!-- ── Твоя часть ──────────────────────────────────────────────────────────── -->
+<div class="section section-yours">
+  <div class="section-head open" id="head-yours">
+    <h2>Твоя часть</h2>
+    <span class="chevron">▾</span>
+  </div>
+  <div class="section-body" id="body-yours">
+
+    <span class="flabel">Песни</span>
+    <div class="song-row">
+      <input type="number" id="song-num-input" min="1" placeholder="Номер Прабхат Самгиты…">
+      <button class="btn-add-song" onclick="addSong()">+ Добавить</button>
+    </div>
+    <div class="song-cards" id="song-cards"></div>
+    <div class="field-hint" id="song-suggest-hint"></div>
+
+    <span class="flabel">Видео (YouTube)</span>
+    <input type="url" id="video-url" placeholder="Пусто = авто-видео Дады из СВАДХЬЯЯ">
+    <div class="auto-video-row">
+      <span class="field-hint" id="video-auto-hint" style="flex:1;margin-top:0">Авто-видео: …</span>
+      <button type="button" class="btn-reset" onclick="refreshAutoVideo()">↻ проверить</button>
+    </div>
+    <div class="field-hint">Заполни поле, только чтобы вручную перекрыть авто-видео. Пусто — играет авто (или слайд Дады, если авто нет).</div>
+
+    <span class="flabel">Финальное видео (YouTube)</span>
+    <input type="url" id="final-video-url" placeholder="https://youtube.com/watch?v=…">
+    <div class="field-hint">Пусто — слайд скрыт. Показывается последним в деке</div>
+
+    <span class="flabel">Сбор средств</span>
+    <div class="money-row">
+      <div>
+        <span class="flabel" style="margin-top:0">Собрали (₽)</span>
+        <input type="number" id="raised" min="0" placeholder="0">
+      </div>
+      <div>
+        <span class="flabel" style="margin-top:0">План (₽)</span>
+        <input type="number" id="plan" min="0" placeholder="30000">
+      </div>
+    </div>
+    <div class="bar-wrap"><div class="bar-fill" id="live-bar" style="width:0%"></div></div>
+    <div class="bar-lbl" id="live-bar-lbl">введите план, чтобы увидеть прогресс</div>
+    <div class="field-hint" id="money-auto-hint"></div>
+  </div>
+</div>
+
+<!-- ── Actions ────────────────────────────────────────────────────────────── -->
+<div class="actions">
+  <button class="btn-primary" onclick="openDeck()">Собрать и открыть дек</button>
+  <div class="btn-row">
+    <button class="btn-secondary" onclick="openDeck()">Превью</button>
+    <button class="btn-secondary" onclick="openPdf()">PDF</button>
+  </div>
+</div>
+
+<!-- ── Song picker modal ───────────────────────────────────────────────────── -->
+<div class="picker-overlay" id="song-picker">
+  <div class="picker">
+    <div class="picker-head">
+      <h3>Выбор песни из каталога</h3>
+      <button class="picker-close" id="picker-close" title="Закрыть">✕</button>
+    </div>
+    <div class="picker-search-wrap">
+      <input type="text" id="picker-search" placeholder="Поиск по номеру или названию…" autocomplete="off">
+    </div>
+    <div class="picker-body" id="picker-body"></div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────────
+let catalog = [];
+let selection = null;
+let manifest = null;
+let songImages = {};   // {number: path} — songs backed by a picture asset
+
+// progItems: {time, title, note, is_practice_end, _source:'telegram'|'override'|'manual', _dirty, _llm_uncertain}
+let progItems = [];
+let practiceEnd = null;   // "HH:MM" of the boundary item (overrides.practice_end), separate from program
+
+// newsAuto: items from manifest.news (overridable as a batch)
+// newsAutoOverridden: true when overrides.news was non-null at load time
+// newsManual: items from overrides.news_manual
+let newsAuto = [];
+let newsAutoOverridden = false;
+let newsManual = [];
+
+let saveTimer = null;
+let dragSrc = null;
+let dragKind = null;
+const SAVE_DELAY = 1200;
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+async function init() {
+  setSave('idle', '☁ авто-сохранение');
+  try {
+    [catalog, selection, songImages] = await Promise.all([
+      fetch('/api/catalog').then(r => r.json()).catch(() => []),
+      fetch('/api/selection').then(r => r.json()).catch(() => null),
+      fetch('/api/song-images').then(r => r.json()).catch(() => ({})),
+    ]);
+  } catch { setSave('error', '✗ нет связи'); }
+
+  try {
+    manifest = await fetch('/manifest.json').then(r => r.json());
+    document.getElementById('week-label').textContent =
+      manifest.date ? `Сборка на ${manifest.date}` : 'Дата не задана';
+    document.getElementById('dada-auto-val').textContent =
+      manifest.dada_comment || '(нет)';
+  } catch {
+    manifest = null;
+    document.getElementById('week-label').textContent = 'manifest недоступен';
+  }
+
+  loadForm();
+}
+
+function loadForm() {
+  const sel = selection || {};
+  const ov  = sel.overrides || {};
+
+  // Твоя часть
+  document.getElementById('video-url').value = sel.video_url || '';
+  document.getElementById('final-video-url').value = sel.final_video_url || '';
+  renderAutoVideo();
+  document.getElementById('raised').value   = sel.raised ?? '';
+  document.getElementById('plan').value     = sel.plan ?? '';
+  renderAutoMoney();
+  document.getElementById('song-cards').innerHTML = '';
+  // no operator pick yet → prefill the picker from the ТГ suggestion (manifest)
+  const initialSongs = (sel.song_numbers && sel.song_numbers.length)
+    ? sel.song_numbers
+    : (manifest?.suggested_songs || []);
+  initialSongs.forEach(renderSongCard);
+  renderSongSuggestHint(sel);
+
+  // Дада
+  document.getElementById('ov-dada').value = ov.dada_comment ?? '';
+
+  // Программа
+  if (ov.program) {
+    progItems = ov.program.map(p => ({
+      ...p, _source: 'override', _dirty: false, _llm_uncertain: p._llm_uncertain ?? false,
+    }));
+  } else {
+    progItems = (manifest?.program || []).map(p => ({
+      ...p, _source: 'telegram', _dirty: false, _llm_uncertain: p._llm_uncertain ?? false,
+    }));
+  }
+  // boundary marker: separate field practice_end ("HH:MM"), overlaid onto progItems for the radio UI
+  practiceEnd = ov.practice_end ?? null;
+  progItems.forEach(p => { p.is_practice_end = !!practiceEnd && p.time === practiceEnd; });
+
+  // Новости
+  if (ov.news) {
+    newsAuto = ov.news.map(t => ({ text: t, _dirty: false }));
+    newsAutoOverridden = true;
+  } else {
+    newsAuto = (manifest?.news || []).map(t => ({ text: t, _dirty: false }));
+    newsAutoOverridden = false;
+  }
+  newsManual = (ov.news_manual || []).map(t => ({ text: t }));
+
+  renderProgram();
+  renderNews();
+  updateAutoMeta();
+}
+
+// ── Program editor ─────────────────────────────────────────────────────────────
+function renderProgram() {
+  const list = document.getElementById('prog-list');
+  list.innerHTML = '';
+
+  progItems.forEach((p, idx) => {
+    const isModified = p._dirty || p._source === 'override' || p._source === 'manual';
+    const badgeCls  = isModified ? 'badge badge-warn' : 'badge badge-src';
+    const badgeTxt  = isModified ? 'изменено вручную'  : 'из Telegram';
+
+    const div = document.createElement('div');
+    div.className = 'prog-item' + (p._llm_uncertain ? ' uncertain' : '');
+    div.draggable = true;
+    div.dataset.idx = idx;
+
+    div.innerHTML = `
+      <div class="prog-inner">
+        <span class="grip">⠿</span>
+        <div class="prog-body">
+          <div class="prog-r1">
+            <input class="prog-time"  type="text" value="${x(p.time)}"  placeholder="ЧЧ:ММ">
+            <input class="prog-title" type="text" value="${x(p.title)}" placeholder="Название пункта">
+            <button class="btn-del" title="Удалить">✕</button>
+          </div>
+          <div class="prog-r2">
+            <input class="prog-note" type="text" value="${x(p.note || '')}" placeholder="заметка (необязательно)">
+          </div>
+          <div class="prog-r3">
+            <label class="radio-lbl${p.is_practice_end ? ' is-end' : ''}">
+              <input type="radio" name="prog-end" value="${idx}" ${p.is_practice_end ? 'checked' : ''}>
+              конец кол. части
+            </label>
+            <span class="${badgeCls}">${badgeTxt}</span>
+            ${p._llm_uncertain ? '<span class="llm-note">⚠ LLM не уверен во времени — проверь</span>' : ''}
+          </div>
+        </div>
+      </div>`;
+
+    const markDirty = (field, value) => {
+      progItems[idx][field] = value;
+      progItems[idx]._dirty = true;
+      const b = div.querySelector('.badge');
+      b.className = 'badge badge-warn'; b.textContent = 'изменено вручную';
+      const rl = div.querySelector('.radio-lbl');
+      rl.classList.remove('is-end');
+      scheduleSave();
+    };
+    div.querySelector('.prog-time').addEventListener('input',  e => markDirty('time',  e.target.value));
+    div.querySelector('.prog-title').addEventListener('input', e => markDirty('title', e.target.value));
+    div.querySelector('.prog-note').addEventListener('input',  e => markDirty('note',  e.target.value || null));
+
+    div.querySelector('.btn-del').addEventListener('click', () => {
+      progItems.splice(idx, 1);
+      renderProgram(); updateAutoMeta(); scheduleSave();
+    });
+
+    div.querySelector('input[type=radio]').addEventListener('change', () => {
+      // write the boundary time to the SEPARATE practice_end field; do NOT dirty the
+      // program (marking the boundary must not freeze the Telegram-sourced program)
+      practiceEnd = progItems[idx].time || null;
+      progItems.forEach((q, j) => { q.is_practice_end = (j === idx); });
+      document.querySelectorAll('.radio-lbl').forEach((lbl, j) => {
+        lbl.classList.toggle('is-end', j === idx);
+      });
+      scheduleSave();
+    });
+
+    setupDrag(div, 'prog');
+    list.appendChild(div);
+  });
+
+  // Source badge in sub-head
+  const hasOverride = progItems.some(p => p._dirty || p._source !== 'telegram');
+  const sb = document.getElementById('prog-src-badge');
+  sb.className = hasOverride ? 'badge badge-warn' : 'badge badge-src';
+  sb.textContent = hasOverride ? 'изменено вручную' : 'из Telegram';
+}
+
+function addProgItem() {
+  progItems.push({ time: '', title: '', note: null, is_practice_end: false,
+                   _source: 'manual', _dirty: true, _llm_uncertain: false });
+  renderProgram(); updateAutoMeta();
+  const ts = document.querySelectorAll('.prog-time');
+  if (ts.length) ts[ts.length - 1].focus();
+  scheduleSave();
+}
+
+function resetProg() {
+  progItems = (manifest?.program || []).map(p => ({
+    ...p, _source: 'telegram', _dirty: false, _llm_uncertain: p._llm_uncertain ?? false,
+  }));
+  // re-apply the boundary overlay so the radio stays consistent (marker is independent)
+  progItems.forEach(p => { p.is_practice_end = !!practiceEnd && p.time === practiceEnd; });
+  renderProgram(); updateAutoMeta(); scheduleSave();
+}
+
+// ── News editor ────────────────────────────────────────────────────────────────
+function renderNews() {
+  const list = document.getElementById('news-list');
+  list.innerHTML = '';
+
+  newsAuto.forEach((item, idx) => {
+    const isDirty = item._dirty || newsAutoOverridden;
+    const div = makeNewsEl(item.text, false, isDirty, idx);
+    list.appendChild(div);
+  });
+  newsManual.forEach((item, idx) => {
+    const div = makeNewsEl(item.text, true, false, idx);
+    list.appendChild(div);
+  });
+
+  const hasAutoChanges = newsAutoOverridden || newsAuto.some(n => n._dirty);
+  const sb = document.getElementById('news-src-badge');
+  sb.className = hasAutoChanges ? 'badge badge-warn' : 'badge badge-src';
+  sb.textContent = hasAutoChanges ? 'изменено вручную' : 'из Airtable';
+}
+
+function makeNewsEl(text, isManual, isDirty, idx) {
+  const div = document.createElement('div');
+  div.className = 'news-item' + (isManual ? ' is-manual' : '');
+  div.draggable = true;
+  div.dataset.idx = idx;
+  div.dataset.manual = isManual ? '1' : '0';
+
+  const badgeCls = isManual ? 'badge badge-new' : (isDirty ? 'badge badge-warn' : 'badge badge-src');
+  const badgeTxt = isManual ? 'вручную'         : (isDirty ? 'изменено вручную'  : 'из Airtable');
+
+  div.innerHTML = `
+    <span class="grip">⠿</span>
+    <input class="news-inp" type="text" value="${x(text)}" placeholder="Текст новости">
+    <span class="${badgeCls}">${badgeTxt}</span>
+    <button class="btn-del">✕</button>`;
+
+  div.querySelector('.news-inp').addEventListener('input', e => {
+    if (isManual) {
+      newsManual[idx].text = e.target.value;
+    } else {
+      newsAuto[idx].text = e.target.value;
+      newsAuto[idx]._dirty = true;
+      newsAutoOverridden = true;
+      const b = div.querySelector('.badge');
+      b.className = 'badge badge-warn'; b.textContent = 'изменено вручную';
+      document.getElementById('news-src-badge').className = 'badge badge-warn';
+      document.getElementById('news-src-badge').textContent = 'изменено вручную';
+    }
+    updateAutoMeta();
+    scheduleSave();
+  });
+
+  div.querySelector('.btn-del').addEventListener('click', () => {
+    if (isManual) newsManual.splice(idx, 1);
+    else { newsAuto.splice(idx, 1); newsAutoOverridden = true; }
+    renderNews(); updateAutoMeta(); scheduleSave();
+  });
+
+  setupDrag(div, 'news');
+  return div;
+}
+
+function addManualNews() {
+  newsManual.push({ text: '' });
+  renderNews(); updateAutoMeta();
+  const inps = document.querySelectorAll('.news-inp');
+  if (inps.length) inps[inps.length - 1].focus();
+  scheduleSave();
+}
+
+function resetNews() {
+  newsAuto = (manifest?.news || []).map(t => ({ text: t, _dirty: false }));
+  newsAutoOverridden = false;
+  newsManual = [];
+  renderNews(); updateAutoMeta(); scheduleSave();
+}
+
+function resetDada() {
+  document.getElementById('ov-dada').value = '';
+  scheduleSave();
+}
+
+// ── Section meta summary ───────────────────────────────────────────────────────
+function updateAutoMeta() {
+  const nProg = progItems.length;
+  const nNews = newsAuto.length + newsManual.length;
+  document.getElementById('auto-meta').textContent =
+    `${nProg} пункт${ru_n(nProg)} · ${nNews} нов${ru_news(nNews)}`;
+}
+
+function ru_n(n) {
+  return n === 1 ? '' : n >= 2 && n <= 4 ? 'а' : 'ов';
+}
+function ru_news(n) {
+  const m = n % 10, h = n % 100;
+  if (h >= 11 && h <= 19) return 'остей';
+  if (m === 1) return 'ость';
+  if (m >= 2 && m <= 4) return 'ости';
+  return 'остей';
+}
+
+// ── Drag & Drop ────────────────────────────────────────────────────────────────
+function setupDrag(el, kind) {
+  el.addEventListener('dragstart', e => {
+    dragSrc = el; dragKind = kind;
+    e.dataTransfer.effectAllowed = 'move';
+    requestAnimationFrame(() => el.classList.add('dragging'));
+  });
+  el.addEventListener('dragend', () => {
+    el.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+    dragSrc = null;
+  });
+  el.addEventListener('dragover', e => {
+    if (!dragSrc || dragSrc === el || dragKind !== kind) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+    el.classList.add('drag-over');
+  });
+  el.addEventListener('drop', e => {
+    if (!dragSrc || dragSrc === el || dragKind !== kind) return;
+    e.preventDefault();
+    el.classList.remove('drag-over');
+    const si = parseInt(dragSrc.dataset.idx, 10);
+    const di = parseInt(el.dataset.idx, 10);
+    if (kind === 'prog') {
+      const [item] = progItems.splice(si, 1);
+      progItems.splice(di, 0, item);
+      renderProgram(); scheduleSave();
+    } else if (kind === 'news') {
+      const srcM = dragSrc.dataset.manual === '1';
+      const dstM = el.dataset.manual === '1';
+      if (srcM === dstM) {
+        const arr = srcM ? newsManual : newsAuto;
+        const [item] = arr.splice(si, 1);
+        arr.splice(di, 0, item);
+        renderNews(); scheduleSave();
+      }
+    }
+  });
+}
+
+// ── Song cards ─────────────────────────────────────────────────────────────────
+function addSong() {
+  const inp = document.getElementById('song-num-input');
+  const raw = inp.value.trim();
+  // Empty number → open catalog picker instead of no-op
+  if (raw === '') { openSongPicker(); return; }
+  const n = parseInt(raw, 10);
+  if (isNaN(n) || n < 1) return;
+  inp.value = '';
+  renderSongCard(n);
+  scheduleSave();
+}
+document.getElementById('song-num-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addSong();
+});
+
+// ── Song picker (choose from catalog) ────────────────────────────────────────────
+// Catalog is seeded Mac-side (milestone M1). This only picks from what's already there.
+function currentSongNums() {
+  return [...document.querySelectorAll('#song-cards .song-card')]
+    .map(c => parseInt(c.dataset.number, 10));
+}
+
+function openSongPicker() {
+  document.getElementById('song-picker').classList.add('open');
+  const s = document.getElementById('picker-search');
+  s.value = '';
+  renderPicker('');
+  s.focus();
+}
+function closeSongPicker() {
+  document.getElementById('song-picker').classList.remove('open');
+}
+
+function renderPicker(filter) {
+  const body = document.getElementById('picker-body');
+  const added = new Set(currentSongNums());
+  const f = filter.trim().toLowerCase();
+
+  // union: catalog (text) songs + image-only numbers, sorted by number
+  const seen = new Set(catalog.map(s => s.number));
+  const list = catalog.map(s => ({ ...s }));
+  Object.keys(songImages).map(Number).forEach(n => {
+    if (!seen.has(n)) list.push({ number: n, _imageOnly: true });
+  });
+  list.sort((a, b) => a.number - b.number);
+
+  if (!list.length) {
+    body.innerHTML = '<div class="picker-empty">Пусто.<br>Текст — сидом на Маке, картинки — в assets/songs/ (веха M1).</div>';
+    return;
+  }
+
+  const rows = list.filter(s => {
+    if (!f) return true;
+    if (String(s.number).includes(f)) return true;
+    if (s._imageOnly) return false;   // image-only rows match by number only
+    return (s.title_translit || '').toLowerCase().includes(f)
+      || (s.translation_first_line || '').toLowerCase().includes(f);
+  });
+
+  if (!rows.length) {
+    body.innerHTML = `<div class="picker-empty">Ничего не найдено по «${x(filter)}».</div>`;
+    return;
+  }
+
+  body.innerHTML = '';
+  rows.forEach(s => {
+    const isAdded = added.has(s.number);
+    const type = songType(s.number);
+    const icon = type === 'image' ? '🖼' : '📝';
+    const title = s._imageOnly ? 'Картинка' : x(s.title_translit);
+    const sub = s._imageOnly ? `assets/songs/${s.number}` : x(s.translation_first_line || '');
+    const row = document.createElement('div');
+    row.className = 'picker-row' + (isAdded ? ' added' : '');
+    row.innerHTML = `
+      <span class="picker-num">№${s.number}</span>
+      <span class="picker-type" title="${type === 'image' ? 'картинка' : 'текст'}">${icon}</span>
+      <div class="picker-text">
+        <div class="picker-translit">${title}</div>
+        <div class="picker-transl">${sub}</div>
+      </div>
+      ${isAdded ? '<span class="picker-added-lbl">✓ уже добавлена</span>' : ''}`;
+    if (!isAdded) {
+      row.addEventListener('click', () => {
+        renderSongCard(s.number);
+        scheduleSave();
+        renderPicker(document.getElementById('picker-search').value);
+      });
+    }
+    body.appendChild(row);
+  });
+}
+
+document.getElementById('picker-search').addEventListener('input', e => renderPicker(e.target.value));
+document.getElementById('picker-close').addEventListener('click', closeSongPicker);
+document.getElementById('song-picker').addEventListener('click', e => {
+  if (e.target.id === 'song-picker') closeSongPicker();   // click on backdrop
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSongPicker();
+});
+// ТГ-suggestion note + a roll-up of numbers with no image AND no catalog text.
+function renderSongSuggestHint(sel) {
+  const el = document.getElementById('song-suggest-hint');
+  if (!el) return;
+  const suggested = manifest?.suggested_songs || [];
+  const hasPick = !!(sel && sel.song_numbers && sel.song_numbers.length);
+  const shown = [...document.querySelectorAll('#song-cards .song-card')]
+    .map(c => Number(c.dataset.number));
+  const missing = shown.filter(n => songType(n) === 'none');
+
+  const parts = [];
+  if (!hasPick && suggested.length) {
+    parts.push('🎵 Предзаполнено из ТГ (Rostov Unit): '
+      + suggested.map(n => '№' + n).join(', ') + ' — подтверди или поправь.');
+  } else if (suggested.length) {
+    parts.push('ТГ предлагал: ' + suggested.map(n => '№' + n).join(', ') + '.');
+  }
+  if (missing.length) {
+    parts.push('⚠ ' + missing.map(n => '№' + n).join(', ')
+      + ' — нет ни картинки, ни текста; добавь картинку в assets/songs/N.webp.');
+  }
+  el.innerHTML = parts.map(x).join('<br>');
+}
+
+// what backs song N on the deck: image (priority) → text → nothing
+function songType(n) {
+  if (songImages[n] != null || songImages[String(n)] != null) return 'image';
+  if (catalog.find(s => s.number === n)) return 'text';
+  return 'none';
+}
+
+function renderSongCard(n) {
+  const type = songType(n);
+  const s = catalog.find(q => q.number === n);
+  const card = document.createElement('div');
+  card.className = (type === 'none') ? 'song-card stub' : 'song-card found';
+  card.dataset.number = n;
+  if (type === 'image') {
+    // image wins even if text also exists; show the title if we have one
+    card.innerHTML = `
+      <span class="song-num">№${n}</span>
+      <div class="song-text">
+        <div class="song-translit">🖼 Картинка</div>
+        <div class="song-transl">${s ? x(s.title_translit) : 'assets/songs/' + n}</div>
+      </div>
+      <button class="btn-rm-song">✕</button>`;
+  } else if (type === 'text') {
+    card.innerHTML = `
+      <span class="song-num">№${n}</span>
+      <div class="song-text">
+        <div class="song-translit">📝 ${x(s.title_translit)}</div>
+        <div class="song-transl">${x(s.translation_first_line || '')}</div>
+      </div>
+      <button class="btn-rm-song">✕</button>`;
+  } else {
+    // neither image nor catalog text → warn the operator (non-blocking)
+    card.innerHTML = `
+      <span class="song-num">№${n}</span>
+      <div class="song-text">
+        <div class="song-stub-lbl">⚠ Нет ни картинки, ни текста</div>
+        <div class="song-transl">добавь картинку в assets/songs/${n}.webp</div>
+      </div>
+      <button class="btn-rm-song">✕</button>`;
+  }
+  card.querySelector('.btn-rm-song').addEventListener('click', () => {
+    card.remove(); scheduleSave();
+  });
+  document.getElementById('song-cards').appendChild(card);
+}
+
+// ── Live progress bar ──────────────────────────────────────────────────────────
+// raised/plan mirror the video pattern: an empty field falls through to the
+// manifest auto value (Telegram finance post) for DISPLAY only. doSave still
+// sends null for an empty field, so leaving it blank never freezes selection.
+function autoRaised() { return Number.isFinite(manifest?.raised) ? manifest.raised : 0; }
+function autoPlan()   { return Number.isFinite(manifest?.plan)   ? manifest.plan   : 0; }
+
+function updateBar() {
+  const rf = document.getElementById('raised').value;
+  const pf = document.getElementById('plan').value;
+  const r = rf !== '' ? (parseInt(rf, 10) || 0) : autoRaised();
+  const p = pf !== '' ? (parseInt(pf, 10) || 0) : autoPlan();
+  const bar = document.getElementById('live-bar');
+  const lbl = document.getElementById('live-bar-lbl');
+  if (!p) {
+    bar.style.width = '0%';
+    lbl.textContent = 'введите план, чтобы увидеть прогресс';
+    return;
+  }
+  const pct = Math.min(100, Math.round(r / p * 100));
+  bar.style.width = pct + '%';
+  lbl.textContent = `${r.toLocaleString('ru-RU')} из ${p.toLocaleString('ru-RU')} ₽ · ${pct}%`;
+}
+
+// Show the auto sum as placeholder + hint so an empty field reads as the auto
+// value, not a bare 0. Called on load and after «↻ проверить» re-reads manifest.
+function renderAutoMoney() {
+  document.getElementById('raised').placeholder = autoRaised() ? String(autoRaised()) : '0';
+  document.getElementById('plan').placeholder   = autoPlan()   ? String(autoPlan())   : '30000';
+  const hint = document.getElementById('money-auto-hint');
+  if (hint) {
+    hint.textContent = autoRaised()
+      ? `💰 Авто из ТГ-поста финансов: ${autoRaised().toLocaleString('ru-RU')} ₽ из `
+        + `${(autoPlan() || 0).toLocaleString('ru-RU')} ₽ — в баре, если поля пусты. `
+        + `Заполни, только чтобы перекрыть.`
+      : 'Авто-сбор из ТГ не найден — заполни вручную.';
+  }
+  updateBar();
+}
+document.getElementById('raised').addEventListener('input',    () => { updateBar(); scheduleSave(); });
+document.getElementById('plan').addEventListener('input',      () => { updateBar(); scheduleSave(); });
+// ── Auto-video (Dada video from СВАДХЬЯЯ, baked into manifest on the Mac) ─────────
+// The VPS never scans Telegram itself; the form only reflects manifest.video_url.
+// «↻ проверить» re-reads the freshest manifest (e.g. after a new Mac push).
+function renderAutoVideo() {
+  const el = document.getElementById('video-auto-hint');
+  if (!el) return;
+  const url = manifest?.video_url;
+  const overridden = document.getElementById('video-url').value.trim();
+  if (url) {
+    el.innerHTML = `🎬 Авто из СВАДХЬЯЯ: <a href="${x(url)}" target="_blank" rel="noopener">${x(url)}</a>`
+      + (overridden ? ' <span style="color:var(--warn)">(перекрыто полем выше)</span>' : ' — играет, если поле пусто');
+  } else {
+    el.textContent = 'Авто-видео не найдено — покажется слайд Дады';
+  }
+}
+async function refreshAutoVideo() {
+  const el = document.getElementById('video-auto-hint');
+  if (el) el.textContent = 'Проверяю manifest…';
+  try {
+    manifest = await fetch('/manifest.json?_=' + Date.now()).then(r => r.json());
+  } catch { /* keep old manifest */ }
+  renderAutoVideo();
+  renderAutoMoney();
+}
+
+document.getElementById('video-url').addEventListener('input', () => { renderAutoVideo(); scheduleSave(); });
+document.getElementById('final-video-url').addEventListener('input', scheduleSave);
+document.getElementById('ov-dada').addEventListener('input',   scheduleSave);
+
+// ── Save ───────────────────────────────────────────────────────────────────────
+function scheduleSave() {
+  setSave('saving', '… сохраняю');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(doSave, SAVE_DELAY);
+}
+
+async function doSave() {
+  const songNums = [...document.querySelectorAll('#song-cards .song-card')]
+    .map(c => parseInt(c.dataset.number, 10)).filter(n => !isNaN(n));
+
+  const hasProgChanges = progItems.some(p => p._dirty || p._source !== 'telegram');
+  const progOv = hasProgChanges
+    ? progItems.map(({ time, title, note, is_practice_end, _llm_uncertain }) =>
+        ({ time, title, note: note || null, is_practice_end, _llm_uncertain }))
+    : null;
+
+  const hasNewsChanges = newsAutoOverridden || newsAuto.some(n => n._dirty);
+  const newsOv    = hasNewsChanges ? newsAuto.map(n => n.text) : null;
+  const manualArr = newsManual.map(n => n.text).filter(Boolean);
+
+  const body = {
+    week_date:    selection?.week_date ?? new Date().toISOString().slice(0, 10),
+    song_numbers: songNums,
+    video_url:       document.getElementById('video-url').value.trim(),
+    final_video_url: document.getElementById('final-video-url').value.trim(),
+    raised:       parseInt(document.getElementById('raised').value, 10) || null,
+    plan:         parseInt(document.getElementById('plan').value,   10) || null,
+    overrides: {
+      program:      progOv,
+      news:         newsOv,
+      news_manual:  manualArr.length ? manualArr : null,
+      practice_end: practiceEnd || null,
+      dada_comment: document.getElementById('ov-dada').value.trim() || null,
+    },
+  };
+
+  try {
+    const r = await fetch('/api/selection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (r.ok) {
+      setSave('saved', '✓ сохранено');
+      setTimeout(() => setSave('idle', '☁'), 3000);
+    } else {
+      setSave('error', `✗ ошибка ${r.status}`);
+    }
+  } catch {
+    setSave('error', '✗ нет связи');
+  }
+}
+
+function setSave(state, text) {
+  const el = document.getElementById('save-ind');
+  el.className = 'save-ind ' + state;
+  document.getElementById('save-text').textContent = text;
+}
+
+// ── Collapse ───────────────────────────────────────────────────────────────────
+function toggleSection(hId, bId) {
+  const h = document.getElementById(hId);
+  const b = document.getElementById(bId);
+  const open = !b.classList.contains('hidden');
+  b.classList.toggle('hidden', open);
+  h.classList.toggle('open', !open);
+}
+document.getElementById('head-auto').addEventListener('click',  () => toggleSection('head-auto',  'body-auto'));
+document.getElementById('head-yours').addEventListener('click', () => toggleSection('head-yours', 'body-yours'));
+
+// ── Utils ──────────────────────────────────────────────────────────────────────
+function x(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function openDeck() { window.open('/', '_blank'); }
+function openPdf()  { window.open('/?print-pdf', '_blank'); }
+
+// ── Boot ───────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
