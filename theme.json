@@ -1,0 +1,19 @@
+{
+  "accent": "#C9773D",
+  "accent_light": "#E8A87C",
+  "slide_bg": "#14161f",
+  "bg_card": "#1E2030",
+  "text_main": "#F2EEE6",
+  "text_muted": "#9DA3B4",
+  "song_translit_color": "#F2EEE6",
+  "song_translation_color": "#C9C4D4",
+  "font_heading": "Manrope, sans-serif",
+  "font_body": "Manrope, sans-serif",
+  "song_background": "assets/backgrounds/default.jpg",
+  "panel_bg": "#1E2030",
+  "panel_radius": "14px",
+  "news_panel_bg": "#EDE8DF",
+  "news_panel_text": "#12141f",
+  "footer_opening_bg": "#C0392B",
+  "footer_continuation_bg": "#2D5A8E"
+}

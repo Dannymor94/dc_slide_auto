@@ -1,0 +1,16 @@
+[Unit]
+Description=dc-deck FastAPI server
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+# WorkingDirectory MUST be server/ — main.py uses non-package imports
+# (from db import ...) and a relative templates dir (Jinja2Templates("templates")).
+WorkingDirectory=/opt/projects/dc-deck/server
+EnvironmentFile=/opt/projects/dc-deck/.env
+ExecStart=/opt/projects/dc-deck/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8013
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

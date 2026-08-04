@@ -1,0 +1,28 @@
+# REFERENCE ONLY — do NOT overwrite /etc/caddy/Caddyfile with this.
+#
+# Per PLATFORM-CONTRACT §6 the main Caddyfile is a thin `import /etc/caddy/sites/*.caddy`.
+# This project's block is generated on the server by:
+#
+#   bash /opt/scripts/register-site.sh dc-deck 8013 dc.vnedrum.ru /opt/projects/dc-deck/dist
+#
+# which drops the block at /etc/caddy/sites/dc-deck.caddy and reloads Caddy — the main
+# Caddyfile and other sites (vnedrum, ycab, zo) are never touched.
+#
+# The generated block matches the shape below. No basic_auth here: auth lives in FastAPI
+# (GET /api/operator, POST /api/selection). No custom /manifest.json or /operator handle:
+# manifest.json + theme.json ship inside dist/, and /operator moved to /api/operator so
+# the standard /api/* proxy covers it.
+
+dc.vnedrum.ru {
+    encode gzip
+
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8013
+    }
+
+    handle {
+        root * /opt/projects/dc-deck/dist
+        try_files {path} {path}/index.html {path}.html /index.html
+        file_server
+    }
+}
