@@ -153,6 +153,35 @@ curl -sI https://dc.vnedrum.ru/api/operator | head -1   # 401 без auth — н
 - §13 таблица проектов: dc-deck | dc.vnedrum.ru | 8014 | dc_deck | deployed
 - бэкап БД dc_deck в общий cron (`/opt/scripts/backup-db.sh`)
 
+### 1.10 Картинки песен (разовая доставка, ОТДЕЛЬНО от weekly.sh)
+Слайд песни — гибрид: для номера N дек ищет `assets/songs/N.{webp,png,jpg}` → есть
+картинка показывает на весь слайд; нет → текст из каталога; нет ни того → заглушка
+«№N нет». Картинки статичны — доставляются РАЗОВО (weekly.sh шлёт только manifest).
+
+⚠️ **Две папки на VPS, не только dist!**
+- `deck/assets/songs/` — по ней сканирует FastAPI `/api/song-images`
+  (`SONGS_ASSET_DIR = ROOT/deck/...`), чтобы дек узнал, у каких номеров есть картинка;
+- `dist/assets/songs/` — из неё Caddy отдаёт сами байты.
+Доставка только в `dist/` НЕ сработает: эндпоинт вернёт `{}` и дек не покажет картинки.
+
+```bash
+# 1) png -> webp (1.5-2МБ -> ~100-150КБ; гибрид ищет webp первым). cwebp нет → оставить png.
+for f in deck/assets/songs/*.png; do cwebp -q 85 -quiet "$f" -o "${f%.png}.webp"; done
+
+# 2) webp в ОБЕ папки на VPS
+for target in deck dist; do
+  rsync -avz -e "ssh -p 2222 -i ~/.ssh/vnedrum" --include='*.webp' --exclude='*' \
+    deck/assets/songs/ \
+    root@147.45.251.134:/opt/projects/dc-deck/$target/assets/songs/
+done
+
+# 3) проверка
+curl -sI https://dc.vnedrum.ru/assets/songs/1.webp | head -1        # HTTP/2 200
+curl -s https://dc.vnedrum.ru/api/song-images | python3 -c "import sys,json;print(len(json.load(sys.stdin)),'картинок')"
+```
+Новую песню с картинкой добавляют так же: положить `N.png` в `deck/assets/songs/` →
+convert → rsync в обе папки. Эндпоинт подхватит на лету (скан на каждый запрос, рестарт не нужен).
+
 ---
 
 ## ЧАСТЬ 2 — Еженедельный автопрожиг (Мак, cron сб 12:00)
