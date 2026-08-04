@@ -1,0 +1,34 @@
+# ── Secrets — NEVER commit (Telegram/Airtable/Groq keys, operator password) ──
+.env
+.env.*
+!.env.example
+*.session
+*.session-journal
+sessions/
+runtime/sessions/
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# ── Node ──
+node_modules/
+
+# ── OS / editor junk ──
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+
+# ── Repo-local junk / not part of the deliverable ──
+_archive_dc-deck/
+/{deck/
+*.pdf
+scratchpad/
