@@ -1,114 +1,232 @@
-# DEPLOY — dc-deck на vnedrum-prod
+# DEPLOY — dc-deck
 
-Разворачивание по `PLATFORM-CONTRACT.md`. Проект — **native (systemd)**, порт **8013**,
-домен `dc.vnedrum.ru`. Главный `/etc/caddy/Caddyfile` не трогаем: блок кладёт
-`register-site.sh` в `/etc/caddy/sites/`.
+Модель развёртывания (что где живёт и почему):
 
-Границы платформы (что общее, что наше):
-- **Postgres** — общий инстанс на хосте; у нас своя БД+юзер (`new-db.sh`).
-- **Caddy** — единый вход; у нас свой блок в `sites/` (`register-site.sh`).
-- **Порт 8013** — следующий свободный после YCab (8012); бэкенд слушает `127.0.0.1:8013`.
+```
+МАК (открытый интернет)                    VPS vnedrum.ru (РФ, без VPN)
+━━━━━━━━━━━━━━━━━━━━━━━━━                  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+cron сб 12:00 → build_manifest.py          Caddy → dist/ (дек + manifest + theme)
+  ├ Telegram (программа/деньги/видео)       FastAPI :8014 (форма, selection, catalog)
+  ├ Airtable (новости)                      Postgres (каталог песен, selection)
+  └ Groq (LLM программы)
+        └ rsync manifest.json → dist/
+        ───────────────────────────────────────────────────►
+
+НА ПОКАЗЕ (VPN включён)
+━━━━━━━━━━━━━━━━━━━━━━
+браузер открывает dc.vnedrum.ru
+  ├ дек грузится с VPS (РФ, ok)
+  └ YouTube-iframe грузится НАПРЯМУЮ через VPN проектора
+```
+
+Ключевые принципы:
+- **VPS наружу не ходит.** Всё блокируемое (Telegram/Airtable/Groq) — на Маке. VPS только отдаёт готовый manifest + форму + БД.
+- **YouTube на показе идёт напрямую** через VPN проектора — сервер видео не проксирует, не перезаливает. iframe грузится в браузере проектора.
+- Платформенные скрипты (`new-db.sh`, `register-site.sh`) — не изобретать своё. Главный Caddyfile НЕ трогать. Полный контракт инфры — `/opt/PLATFORM-CONTRACT.md` на VPS.
 
 ---
 
-## Один статичный root: `dist/`
+## ЧАСТЬ 1 — Разовый деплой на VPS
 
-Caddy отдаёт **только** `/opt/projects/dc-deck/dist`. Поэтому `manifest.json` и
-`theme.json` должны лежать **внутри dist**, а не отдаваться из `data/` кастомным handle.
-Деплой собирает `dist = deck/* + manifest.json + theme.json`.
+Выполняется один раз. Все команды — с Мака (SSH внутри).
+SSH: `ssh -p 2222 -i ~/.ssh/vnedrum root@147.45.251.134`
 
-boot.js фетчит относительно (`theme.json`, `manifest.json`) и same-origin (`/api/*`) —
-всё резолвится под одним origin `dc.vnedrum.ru`, хардкода localhost нет.
+### 1.0 Порт свободен
+```bash
+ssh -p 2222 root@147.45.251.134 "ss -tlnp | grep -E '80[0-9][0-9]'"
+```
+Планировался 8013 (следующий после YCab 8012), но **8013 оказался занят** живым node-процессом → берём следующий свободный **8014**. Всегда проверять фактически, не по плану.
 
----
+### 1.1 База данных (платформенный скрипт)
+```bash
+ssh -p 2222 root@147.45.251.134 "bash /opt/scripts/new-db.sh dc_deck"
+# ⚠️ имя БД — dc_deck (ПОДЧЁРКИВАНИЕ). new-db.sh отклоняет дефис (dc-deck).
+# СОХРАНИ connection string (пароль печатается ОДИН раз, буквы+цифры).
+# new-db.sh сам делает GRANT ON SCHEMA public + ALTER OWNER (Postgres 16).
+```
+Папка проекта и домен остаются `dc-deck` (дефис) — расходится только имя БД.
 
-## Конвейер
+### 1.2 Папки проекта
+```bash
+ssh -p 2222 root@147.45.251.134 "mkdir -p /opt/projects/dc-deck/{dist,uploads}"
+```
+
+### 1.3 Код с Мака (rsync WHITELIST — только явные пути)
+Per CLAUDE.md rsync идёт whitelist, не blacklist: пушим ровно нужное, `build/` (Мак-сторона) на VPS не нужен, `.env`/`.session`/`.venv`/`.git` физически не попадают.
+```bash
+cd /Users/danny/Documents/DC_slids-auto
+rsync -avz -e "ssh -p 2222 -i ~/.ssh/vnedrum" \
+  --exclude='__pycache__' --exclude='*.pyc' --exclude='.DS_Store' \
+  --exclude='*.session' --exclude='.env*' \
+  deck server data infra theme.json \
+  root@147.45.251.134:/opt/projects/dc-deck/
+```
+После пуша проверить, что не утекло лишнего:
+```bash
+ssh -p 2222 root@147.45.251.134 'cd /opt/projects/dc-deck && find . \( -name ".env*" -o -name "*.session" -o -name ".git" \)'   # пусто
+```
+
+### 1.4 dist = дек + manifest + theme (единый static-root)
+```bash
+ssh -p 2222 root@147.45.251.134 '
+  cd /opt/projects/dc-deck
+  cp -rL deck/* dist/
+  cp data/manifest.json dist/
+  cp theme.json dist/
+  grep -rn "localhost\|127.0.0.1\|:8000" dist/ && echo "!!! ЕСТЬ localhost — исправить" || echo "dist чист"
+'
+```
+`-L` разыменовывает симлинк `deck/theme.json → ../theme.json`.
+
+### 1.5 .env на сервере (секреты только тут; Airtable/Telegram/Groq НЕ нужны на VPS)
+```bash
+# Имена ровно как читает код (grep os.environ server/): DATABASE_URL, OPERATOR_USER, OPERATOR_PASS.
+# БЕЗ inline-комментов (systemd EnvironmentFile берёт всю строку как значение).
+# Порт НЕ через .env — он зашит в ExecStart юнита (--port 8014).
+ssh -p 2222 root@147.45.251.134 'umask 077; cat > /opt/projects/dc-deck/.env <<EOF
+DATABASE_URL=<connection string из 1.1>
+OPERATOR_USER=operator
+OPERATOR_PASS=<стойкий, буквы+цифры>
+EOF
+chmod 600 /opt/projects/dc-deck/.env'
+```
+
+### 1.6 venv + таблицы + сид + сервис
+```bash
+ssh -p 2222 root@147.45.251.134 '
+  cd /opt/projects/dc-deck
+  python3 -m venv .venv
+  ./.venv/bin/pip install -r server/requirements.txt        # incl. python-dotenv (db.py/main.py его импортят)
+  set -a; . ./.env; set +a
+  ( cd server && ../.venv/bin/python -c "from db import init_db; init_db()" )   # таблицы ДО сида; запуск ИЗ server/
+  ./.venv/bin/python server/seed_songs.py                                       # сид каталога песен
+  cp infra/dc-deck.service /etc/systemd/system/
+  systemctl daemon-reload && systemctl enable --now dc-deck
+  systemctl is-active dc-deck && journalctl -u dc-deck -n 30 --no-pager
+'
+```
+Проверь в юните: `WorkingDirectory=/opt/projects/dc-deck/server`, `EnvironmentFile=.../.env`,
+`ExecStart=.../uvicorn main:app --host 127.0.0.1 --port 8014`.
+`seed_songs.py` пишет в `song` до первого запуска сервиса — поэтому `init_db` идёт раньше сида.
+
+### 1.7 Домен + TLS (блок в sites/, главный Caddyfile НЕ трогать)
+> ⚠️ **`register-site.sh` на этом деплое сгенерировал НЕВАЛИДНЫЙ блок** (директиву
+> `handle /api/* { reverse_proxy … }` в одну строку — Caddy это не принимает, `caddy validate`
+> падает). Это баг платформенного скрипта (см. PLATFORM-CONTRACT §6/§11, требует починки).
+> **До починки — писать блок ВРУЧНУЮ** по образцу рабочего `sites/ycab.caddy` (многострочно):
 
 ```bash
-# 0. Порт — убедиться, что 8013 свободен
-ss -tlnp | grep -E '80[0-9][0-9]'          # 8010/8011/8012 заняты → берём 8013
+ssh -p 2222 root@147.45.251.134 'cat > /etc/caddy/sites/dc-deck.caddy <<EOF
+dc.vnedrum.ru {
+    encode gzip
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8014
+    }
+    handle {
+        root * /opt/projects/dc-deck/dist
+        try_files {path} {path}/index.html {path}.html /index.html
+        file_server
+    }
+}
+EOF'
+# ОБЯЗАТЕЛЬНО валидировать ДО применения; невалидно → удалить блок, НЕ применять:
+ssh -p 2222 root@147.45.251.134 'caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile'
+# только reload (НЕ restart — restart уронит живые сайты на секунды):
+ssh -p 2222 root@147.45.251.134 'systemctl reload caddy'
+```
+После reload — проверить, что **соседи живы** (не только dc): `curl -sI https://vnedrum.ru https://ycab.vnedrum.ru https://zo.vnedrum.ru`. Любой упал → `rm /etc/caddy/sites/dc-deck.caddy` + `systemctl reload caddy` немедленно.
 
-# 1. БД (платформенный скрипт: GRANT ON SCHEMA + ALTER OWNER + печатает connection string)
-bash /opt/scripts/new-db.sh dc-deck        # СОХРАНИТЬ connection string (пароль 1 раз, буквы+цифры)
-
-# 2. Папки (родительские заранее — rsync цепочку не создаёт)
-mkdir -p /opt/projects/dc-deck/{dist,uploads}
-
-# 3. Код с Мака (whitelist, .env исключён)
-rsync -avz -e "ssh -p 2222" \
-  --exclude='.env*' --exclude='uploads/' --exclude='__pycache__' \
-  --exclude='.venv' --exclude='.git' \
-  ./ root@147.45.251.134:/opt/projects/dc-deck/
-
-# 4. Собрать dist = статика дека + manifest + theme (единый root)
-cp -rL /opt/projects/dc-deck/deck/*             /opt/projects/dc-deck/dist/
-cp     /opt/projects/dc-deck/data/manifest.json /opt/projects/dc-deck/dist/
-cp     /opt/projects/dc-deck/theme.json         /opt/projects/dc-deck/dist/
-grep -rn localhost /opt/projects/dc-deck/dist/  # должно быть пусто
-
-# 5. Секреты на сервере (имена ровно как читает код: DATABASE_URL, OPERATOR_USER, OPERATOR_PASS)
-cd /opt/projects/dc-deck
-cp infra/dc-deck.env.example .env && nano .env && chmod 600 .env
-#   DATABASE_URL = connection string из шага 1; OPERATOR_USER/PASS — свои. Без inline-комментов.
-
-# 6. venv + таблицы ДО сида + сид + сервис
-python3 -m venv .venv
-./.venv/bin/pip install -r server/requirements.txt
-# init_db и seed запускаем ИЗ server/ — main.py/db.py используют непакетные импорты
-set -a; . ./.env; set +a
-( cd server && ../.venv/bin/python -c "from db import init_db; init_db()" )   # таблицы
-./.venv/bin/python server/seed_songs.py                                        # 2 песни (№1, №63)
-cp infra/dc-deck.service /etc/systemd/system/
-systemctl daemon-reload && systemctl enable --now dc-deck
-journalctl -u dc-deck -n 50
-
-# 7. Домен + TLS (кладёт блок в sites/, главный Caddyfile не трогает)
-bash /opt/scripts/register-site.sh dc-deck 8013 dc.vnedrum.ru /opt/projects/dc-deck/dist
-
-# 8. Проверка
-bash /opt/scripts/healthcheck.sh dc-deck 8013 dc.vnedrum.ru
+### 1.8 Проверка
+```bash
+# ACME: первый серт выписывается не мгновенно — при TLS-ошибке подожди 30с, повтори.
 curl -sI https://dc.vnedrum.ru/ | head -3
-
-# 9. Реестр §3 (8013) + таблица проектов §13 + бэкап БД в cron
+curl -s https://dc.vnedrum.ru/manifest.json | head -c 100
+curl -s https://dc.vnedrum.ru/api/catalog | python3 -c "import sys,json;print(len(json.load(sys.stdin)),'песен')"
+curl -sI https://dc.vnedrum.ru/api/operator | head -1   # 401 без auth — норма
 ```
+- дек открывается, manifest отдаётся, каталог непустой → деплой удался.
+- форма: `https://dc.vnedrum.ru/api/operator` (basic-auth в FastAPI).
+- `healthcheck.sh dc-deck 8014 dc.vnedrum.ru` ложно пишет «базы dc-deck нет» — ищет по имени с дефисом, а БД `dc_deck`. БД рабочая.
 
-Приложение и само создаёт таблицы на старте (`lifespan` → `init_db`), но шаг 6 создаёт
-их **до** сида, потому что `seed_songs.py` пишет в `song` раньше первого запуска сервиса.
+### 1.9 Обнови контракт
+- `/opt/PLATFORM-CONTRACT.md` §3 реестр портов: dc-deck → 8014
+- §13 таблица проектов: dc-deck | dc.vnedrum.ru | 8014 | dc_deck | deployed
+- бэкап БД dc_deck в общий cron (`/opt/scripts/backup-db.sh`)
 
 ---
 
-## Дек и API — под одним origin
+## ЧАСТЬ 2 — Еженедельный автопрожиг (Мак, cron сб 12:00)
 
-| Путь | Кто отдаёт | Auth |
-|---|---|---|
-| `/`, `/boot.js`, `/slides/*`, `/manifest.json`, `/theme.json` | Caddy `file_server` из `dist/` | — |
-| `GET /api/catalog` | FastAPI (proxy) | открыто (дек читает) |
-| `GET /api/selection` | FastAPI (proxy) | открыто (дек читает) |
-| `POST /api/selection` | FastAPI (proxy) | basic-auth (FastAPI) |
-| `GET /api/operator` | FastAPI (proxy) | basic-auth (FastAPI) |
+Данные печёт МАК (там открыт Telegram/Airtable/Groq), затем rsync на VPS в `dist/`.
 
-Форма оператора — `https://dc.vnedrum.ru/api/operator`. basic-auth только в FastAPI;
-в Caddy-блоке `basicauth` нет.
+### 2.1 Скрипт прожига + доставки
+Создать `build/weekly.sh` (chmod +x):
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+cd /Users/danny/Documents/DC_slids-auto
+source .venv/bin/activate
+
+# 1. собрать manifest (Telegram + Airtable + Groq → data/manifest.json)
+python build/build_manifest.py >> /Users/danny/dc-deck-build.log 2>&1
+
+# 2. доставить ТОЛЬКО manifest.json в dist/ на VPS (dist — обслуживаемый root)
+rsync -avz -e "ssh -p 2222 -i ~/.ssh/vnedrum" \
+  data/manifest.json \
+  root@147.45.251.134:/opt/projects/dc-deck/dist/manifest.json \
+  >> /Users/danny/dc-deck-build.log 2>&1
+
+echo "[$(date)] weekly build done" >> /Users/danny/dc-deck-build.log
+```
+Важно: цель rsync — `dist/manifest.json` (сервер отдаёт из dist), НЕ `data/`.
+
+### 2.2 Триггер по времени — cron суббота 12:00
+```bash
+crontab -e
+# добавить строку:
+0 12 * * 6 /Users/danny/Documents/DC_slids-auto/build/weekly.sh
+```
+`0 12 * * 6` = каждую субботу в 12:00 (день недели 6 = суббота).
+
+Ограничение cron на Маке: **Мак должен быть включён и не спать** в субботу 12:00.
+Если Мак спит — джоб пропустится. Варианты:
+- держать Мак разбуженным по расписанию (Системные настройки → Расписание/pmset),
+- или запускать прожиг вручную субботним утром (`build/weekly.sh`),
+- или (надёжно) перенести cron на всегда-включённую машину. Но Telegram/Airtable
+  заблокированы (РФ), так что VPS не подходит — нужен зарубежный always-on хост.
+  Для старта: Мак + ручной запуск как fallback, если проспал.
+
+### 2.3 Проверка автопрожига
+```bash
+/Users/danny/Documents/DC_slids-auto/build/weekly.sh
+curl -s https://dc.vnedrum.ru/manifest.json | python3 -c "import sys,json;d=json.load(sys.stdin);print('program',len(d['program']),'raised',d.get('raised'),'news',len(d['news']))"
+# лог: tail /Users/danny/dc-deck-build.log
+```
 
 ---
 
-## Еженедельное обновление (задел под M4)
+## ЧАСТЬ 3 — YouTube на показе (напрямую через VPN)
 
-Мак-билд пересобирает `data/manifest.json` и пушит его в **обслуживаемый root**:
+Ничего настраивать не нужно — так уже работает по архитектуре:
+- `manifest.video_url` / `final_music_url` — обычные YouTube-ссылки.
+- Дек рендерит их `<iframe>`. На проекторе с VPN iframe грузится НАПРЯМУЮ с YouTube.
+- VPS видео не проксирует и не перезаливает — только отдаёт ссылку в разметке.
 
-```
-push.sh → /opt/projects/dc-deck/dist/manifest.json     # НЕ в data/ — дек читает dist/
-```
+Единственная страховка (уже в деке): если iframe не поднялся (флаки-VPN) —
+fallback «Открыть на YouTube» / слайд-заглушка. Никакого плеера на экране не будет.
 
-Иначе дек не увидит обновление недели. `selection`/`overrides` живут в Postgres и
-пересборку manifest переживают (мердж `overrides || EXCLUDED.overrides` в `POST /api/selection`).
+Проверка на показе: открыть dc.vnedrum.ru при включённом VPN → видео играет.
+Без VPN (тест на VPS/локали в РФ) YouTube будет штормить — это нормально,
+на реальном показе VPN есть.
 
 ---
 
-## Стоп-гейт M0 (проверить после деплоя)
+## Еженедельный цикл оператора (итог)
 
-1. `https://dc.vnedrum.ru` рендерит все слайды из `manifest.json` + пустого selection.
-2. В форме выбрал песню №1 → карточка резолвится из каталога → слайд песни появился.
-3. Правка строки программы в форме → в `overrides` → пережила повторную заливку manifest.
-4. Пустое видео → слайд «видео нет». Сервер недоступен → дек по manifest + баннер «нет связи».
-5. Граница слайда 1: program[0].time `11:59` → утреннее приветствие; `12:00` → дневное.
+1. **Автоматически** (сб 12:00, Мак-cron): программа, деньги, видео Дады, новости →
+   manifest → VPS. Оператор ничего не делает.
+2. **Вручную** (оператор, в форме, когда угодно до показа): выбрать песни (пикер),
+   при необходимости — поправить программу/новости/сумму (оверрайд), отметить границу «Далее».
+3. **Показ** (проектор + VPN): открыть dc.vnedrum.ru. YouTube грузится напрямую.
+
+Если Мак проспал субботу — запустить `build/weekly.sh` вручную.
