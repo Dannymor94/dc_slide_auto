@@ -185,7 +185,7 @@ async def post_selection(request: Request, _: str = Depends(require_auth)):
 
 @app.get("/api/operator", response_class=HTMLResponse)
 def operator_form(request: Request, _: str = Depends(require_auth)):
-    return templates.TemplateResponse("operator.html", {"request": request})
+    return HTMLResponse((pathlib.Path(__file__).parent / "templates" / "operator.html").read_text(encoding="utf-8"))
 
 # ── Static deck (catch-all, LAST) ─────────────────────────────────────────────
 # Mounts deck/ at "/" — boot.js, slides/*, assets/* are served from here.
