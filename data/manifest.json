@@ -1,0 +1,58 @@
+{
+  "date": "2026-08-02",
+  "program": [
+    {
+      "time": "08:30",
+      "title": "Сбор в джагрити",
+      "note": null,
+      "is_practice_end": false,
+      "_llm_uncertain": false
+    },
+    {
+      "time": "08:45",
+      "title": "Дхармачакра",
+      "note": null,
+      "is_practice_end": false,
+      "_llm_uncertain": false
+    },
+    {
+      "time": "10:30",
+      "title": "Свободное время, личные уроки",
+      "note": null,
+      "is_practice_end": false,
+      "_llm_uncertain": false
+    },
+    {
+      "time": "11:00",
+      "title": "Сатсанг",
+      "note": "Немного поговорим о том, как у кого дела и как прошла неделя. Без долгих лекций — просто чтобы получше узнать друг друга",
+      "is_practice_end": false,
+      "_llm_uncertain": false
+    },
+    {
+      "time": "12:00",
+      "title": "Каошики - Тандава",
+      "note": null,
+      "is_practice_end": false,
+      "_llm_uncertain": false
+    },
+    {
+      "time": "12:10",
+      "title": "Пикник",
+      "note": "Приносите угощения и делитесь вкусностями!",
+      "is_practice_end": false,
+      "_llm_uncertain": false
+    }
+  ],
+  "news": [
+    "КМ с Дадой Нитьябодхой — 9 августа",
+    "Книжный клуб — 15 августа",
+    "Чтение пьес по ролям — 22 августа",
+    "Садхана Шивир — 23 августа"
+  ],
+  "dada_comment": "Наш Дада даст комментарий на следующей неделе, чтобы охватить и этот кусочек, и конец главы.",
+  "final_music_url": null,
+  "raised": 18700,
+  "plan": 30000,
+  "video_url": "https://youtu.be/5AwaTftbebo"
+}
