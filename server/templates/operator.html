@@ -249,6 +249,12 @@
   }
   input:focus { border-color: var(--accent); }
   .field-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem; font-style: italic; }
+  .top-alert { margin: 0.2rem 0 0.9rem; padding: 0.7rem 0.9rem; border-radius: 10px;
+    background: rgba(220,120,60,0.12); border: 1px solid rgba(220,120,60,0.35);
+    color: #e8a87c; font-size: 0.82rem; line-height: 1.4; }
+  .top-alert code { background: rgba(0,0,0,0.28); padding: 0 0.25rem; border-radius: 4px; font-size: 0.9em; }
+  .btn-apply-suggest { background: var(--accent, #E8934A); color: #fff; border: none; border-radius: 6px;
+    padding: 0.18rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; margin-left: 0.2rem; }
   .auto-video-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
   .auto-video-row .btn-reset { flex-shrink: 0; }
   #video-auto-hint a { color: var(--accent-light); text-decoration: none; word-break: break-all; }
@@ -357,6 +363,9 @@
   </div>
   <div class="lock-icon">🔒</div>
 </div>
+
+<!-- Канал А: песни из чата, которых нет в базе (пассивный баннер) -->
+<div class="top-alert" id="top-alert" style="display:none"></div>
 
 <!-- ── Собирается само ─────────────────────────────────────────────────────── -->
 <div class="section">
@@ -533,12 +542,9 @@ function loadForm() {
   document.getElementById('plan').value     = sel.plan ?? '';
   renderAutoMoney();
   document.getElementById('song-cards').innerHTML = '';
-  // no operator pick yet → prefill the picker from the ТГ suggestion (manifest)
-  const initialSongs = (sel.song_numbers && sel.song_numbers.length)
-    ? sel.song_numbers
-    : (manifest?.suggested_songs || []);
-  initialSongs.forEach(renderSongCard);
-  renderSongSuggestHint(sel);
+  (sel.song_numbers || []).forEach(renderSongCard);   // only the operator's own pick — never silent-prefill
+  renderSongSuggest();     // suggestion line + [Применить]
+  renderTopAlert();        // channel А: chat songs not in base
 
   // Дада
   document.getElementById('ov-dada').value = ov.dada_comment ?? '';
@@ -914,27 +920,42 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeSongPicker();
 });
 // ТГ-suggestion note + a roll-up of numbers with no image AND no catalog text.
-function renderSongSuggestHint(sel) {
+// Канал А (верхний баннер): номера из чата, которых НЕТ ни в картинках, ни в каталоге.
+function renderTopAlert() {
+  const el = document.getElementById('top-alert');
+  if (!el) return;
+  const missing = (manifest?.suggested_songs || []).filter(n => songType(n) === 'none');
+  if (!missing.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
+  el.style.display = '';
+  el.innerHTML = '⚠️ Песни из чата, которых НЕТ в базе: <b>'
+    + missing.map(n => '№' + n).join(', ')
+    + '</b> — добавь картинку в <code>assets/songs/&lt;N&gt;.webp</code> (или текст в каталог).';
+}
+
+// Предложение из чата + [Применить]. Никогда не затирает выбор оператора молча —
+// перенос происходит только по явному клику.
+function renderSongSuggest() {
   const el = document.getElementById('song-suggest-hint');
   if (!el) return;
   const suggested = manifest?.suggested_songs || [];
-  const hasPick = !!(sel && sel.song_numbers && sel.song_numbers.length);
-  const shown = [...document.querySelectorAll('#song-cards .song-card')]
-    .map(c => Number(c.dataset.number));
-  const missing = shown.filter(n => songType(n) === 'none');
+  if (!suggested.length) { el.innerHTML = ''; return; }
+  const shown = [...document.querySelectorAll('#song-cards .song-card')].map(c => Number(c.dataset.number));
+  const applied = suggested.length === shown.length && suggested.every(n => shown.includes(n));
+  const list = suggested.map(n => '№' + n).join(', ');
+  if (applied) { el.innerHTML = '🎵 Из чата: <b>' + x(list) + '</b> — применено.'; return; }
+  const warn = shown.length ? ' <span style="color:var(--warn)">(заменит текущий выбор)</span>' : '';
+  el.innerHTML = '🎵 Предложено из чата: <b>' + x(list) + '</b> '
+    + '<button type="button" class="btn-apply-suggest" onclick="applySuggested()">Применить</button>' + warn;
+}
 
-  const parts = [];
-  if (!hasPick && suggested.length) {
-    parts.push('🎵 Предзаполнено из ТГ (Rostov Unit): '
-      + suggested.map(n => '№' + n).join(', ') + ' — подтверди или поправь.');
-  } else if (suggested.length) {
-    parts.push('ТГ предлагал: ' + suggested.map(n => '№' + n).join(', ') + '.');
-  }
-  if (missing.length) {
-    parts.push('⚠ ' + missing.map(n => '№' + n).join(', ')
-      + ' — нет ни картинки, ни текста; добавь картинку в assets/songs/N.webp.');
-  }
-  el.innerHTML = parts.map(x).join('<br>');
+// Явный перенос suggested → song_numbers (карточки). Действие оператора, не молчаливое.
+function applySuggested() {
+  const suggested = manifest?.suggested_songs || [];
+  document.getElementById('song-cards').innerHTML = '';
+  suggested.forEach(renderSongCard);
+  renderSongSuggest();
+  renderTopAlert();
+  scheduleSave();
 }
 
 // what backs song N on the deck: image (priority) → text → nothing
