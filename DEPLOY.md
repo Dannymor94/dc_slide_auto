@@ -184,53 +184,79 @@ convert → rsync в обе папки. Эндпоинт подхватит на
 
 ---
 
-## ЧАСТЬ 2 — Еженедельный автопрожиг (Мак, cron сб 12:00)
+## ЧАСТЬ 2 — Еженедельный автопрожиг (Мак: launchd + pmset + alias)
 
-Данные печёт МАК (там открыт Telegram/Airtable/Groq), затем rsync на VPS в `dist/`.
+Данные печёт МАК (там открыт Telegram/Airtable/Groq), затем rsync manifest на VPS в `dist/`.
+Три слоя надёжности: **launchd** (основной) + **pmset** (будильник) + **alias** (ручной резерв).
 
-### 2.1 Скрипт прожига + доставки
-Создать `build/weekly.sh` (chmod +x):
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-cd /Users/danny/Documents/DC_slids-auto
-source .venv/bin/activate
+### 2.1 Скрипт прожига — `build/weekly.sh` (в репо, chmod +x)
+Собирает manifest (`build_manifest.py`) и rsync-ит ТОЛЬКО `data/manifest.json` в `dist/manifest.json`
+на VPS (сервер отдаёт из dist, НЕ из data). Пути к venv и SSH-ключу — **абсолютные**: launchd
+запускает скрипт в урезанном окружении без shell-переменных. Идемпотентен, лог `~/dc-deck-build.log`.
+Вручную: `bash build/weekly.sh`.
 
-# 1. собрать manifest (Telegram + Airtable + Groq → data/manifest.json)
-python build/build_manifest.py >> /Users/danny/dc-deck-build.log 2>&1
+### 2.2 launchd — основной планировщик (наверстывает пропуск при пробуждении)
+Почему launchd, а не cron: если Мак спал в субботу 12:00, launchd **выполнит пропущенную задачу
+при пробуждении**; cron молча пропустит.
 
-# 2. доставить ТОЛЬКО manifest.json в dist/ на VPS (dist — обслуживаемый root)
-rsync -avz -e "ssh -p 2222 -i ~/.ssh/vnedrum" \
-  data/manifest.json \
-  root@147.45.251.134:/opt/projects/dc-deck/dist/manifest.json \
-  >> /Users/danny/dc-deck-build.log 2>&1
-
-echo "[$(date)] weekly build done" >> /Users/danny/dc-deck-build.log
+Файл `~/Library/LaunchAgents/ru.vnedrum.dcdeck.build.plist` (НЕ в репо — конфиг Мака):
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>ru.vnedrum.dcdeck.build</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>/Users/danny/Documents/DC_slids-auto/build/weekly.sh</string></array>
+  <key>StartCalendarInterval</key>
+  <dict><key>Weekday</key><integer>6</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+  <key>StandardOutPath</key><string>/Users/danny/dc-deck-build.log</string>
+  <key>StandardErrorPath</key><string>/Users/danny/dc-deck-build.log</string>
+  <key>RunAtLoad</key><false/>
+</dict></plist>
 ```
-Важно: цель rsync — `dist/manifest.json` (сервер отдаёт из dist), НЕ `data/`.
+Weekday 6 = суббота. Загрузка: `launchctl load ~/Library/LaunchAgents/ru.vnedrum.dcdeck.build.plist`
+(выгрузка — `unload`; проверка — `launchctl list | grep dcdeck`).
 
-### 2.2 Триггер по времени — cron суббота 12:00
+### 2.3 ⚠️ Full Disk Access для `/bin/bash` (ОБЯЗАТЕЛЬНО — иначе launchd молча падает)
+Проект в `~/Documents` — папка под защитой macOS **TCC**. launchd запускает `/bin/bash` **напрямую**
+(не через Терминал), поэтому:
+- грант FDA на **Терминал/iTerm НЕ помогает** — их launchd не использует;
+- без гранта launchd падает: `LastExitStatus 32256` (exit 126), в логе
+  `/bin/bash: …/weekly.sh: Operation not permitted` (не может даже прочитать скрипт).
+
+Выдать доступ:
+1. System Settings → **Privacy & Security → Full Disk Access** → **«+»**
+2. **Cmd+Shift+G** → `/bin/bash` → Open → в списке появится строка **`bash`**, тумблер **ON**
+3. **Cmd+Q** (закрыть System Settings — TCC применяет грант по закрытии)
+
+Проверка, что действует: `launchctl start` (§2.6) даёт НОВУЮ «weekly build done», а не «Operation not permitted».
+Перенос проекта из Documents тоже снял бы TCC, но осиротит память сессии — не делаем.
+
+### 2.4 pmset — будильник Мака (разбудить к субботе)
+launchd наверстает пропуск при пробуждении, но чтобы Мак включился — будильник (нужен sudo):
 ```bash
-crontab -e
-# добавить строку:
-0 12 * * 6 /Users/danny/Documents/DC_slids-auto/build/weekly.sh
+sudo pmset repeat wakeorpoweron S 12:00:00     # каждую субботу 12:00; проверка: pmset -g sched
 ```
-`0 12 * * 6` = каждую субботу в 12:00 (день недели 6 = суббота).
+Требует питания (ноут — в адаптере). Проснётся чуть позже 12:00 — launchd всё равно наверстает.
 
-Ограничение cron на Маке: **Мак должен быть включён и не спать** в субботу 12:00.
-Если Мак спит — джоб пропустится. Варианты:
-- держать Мак разбуженным по расписанию (Системные настройки → Расписание/pmset),
-- или запускать прожиг вручную субботним утром (`build/weekly.sh`),
-- или (надёжно) перенести cron на всегда-включённую машину. Но Telegram/Airtable
-  заблокированы (РФ), так что VPS не подходит — нужен зарубежный always-on хост.
-  Для старта: Мак + ручной запуск как fallback, если проспал.
+### 2.5 alias `dcbuild` — ручной резерв
+В `~/.zshrc`: `alias dcbuild='/Users/danny/Documents/DC_slids-auto/build/weekly.sh'`.
+Субботним утром, если Мак проспал: `dcbuild`.
 
-### 2.3 Проверка автопрожига
+### 2.6 Проверка автопрожига целиком
 ```bash
-/Users/danny/Documents/DC_slids-auto/build/weekly.sh
+# форсировать джоб сейчас (как будто наступила суббота) и убедиться, что дошло до VPS:
+base=$(grep -c "weekly build done" ~/dc-deck-build.log)
+launchctl start ru.vnedrum.dcdeck.build
+sleep 60; grep -c "weekly build done" ~/dc-deck-build.log            # стало base+1
+launchctl list ru.vnedrum.dcdeck.build | grep LastExitStatus         # = 0
 curl -s https://dc.vnedrum.ru/manifest.json | python3 -c "import sys,json;d=json.load(sys.stdin);print('program',len(d['program']),'raised',d.get('raised'),'news',len(d['news']))"
-# лог: tail /Users/danny/dc-deck-build.log
+# лог: tail ~/dc-deck-build.log
 ```
+
+> **Backlog:** все три слоя — обход того, что прожиг привязан к Маку (TCC + «Мак спит»).
+> Идеал — вынести билд на дешёвый **always-on хост вне РФ** (ни TCC, ни сна) → launchd/pmset/alias
+> уходят. Для старта Мак + эти три слоя достаточно.
 
 ---
 
