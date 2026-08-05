@@ -189,5 +189,15 @@ def operator_form(request: Request, _: str = Depends(require_auth)):
 
 # ── Static deck (catch-all, LAST) ─────────────────────────────────────────────
 # Mounts deck/ at "/" — boot.js, slides/*, assets/* are served from here.
+@app.get("/api/build-status")
+def get_build_status():
+    """Last Mac-build status (data/last_build_status.json, delivered by the build).
+    Feeds the operator form status line (channel А). {} until the first build."""
+    try:
+        return json.loads((DATA_DIR / "last_build_status.json").read_text())
+    except Exception:
+        return {}
+
+
 # Must come after all @app.get routes.
 app.mount("/", StaticFiles(directory=str(DECK_DIR), html=True), name="deck")

@@ -255,6 +255,9 @@
   .top-alert code { background: rgba(0,0,0,0.28); padding: 0 0.25rem; border-radius: 4px; font-size: 0.9em; }
   .btn-apply-suggest { background: var(--accent, #E8934A); color: #fff; border: none; border-radius: 6px;
     padding: 0.18rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; margin-left: 0.2rem; }
+  .build-status { margin: 0.2rem 0 0.6rem; padding: 0.5rem 0.8rem; border-radius: 9px; font-size: 0.78rem; }
+  .build-status.ok  { background: rgba(60,180,100,0.10); border: 1px solid rgba(60,180,100,0.3); color: #8fd6a8; }
+  .build-status.bad { background: rgba(220,120,60,0.12); border: 1px solid rgba(220,120,60,0.35); color: #e8a87c; }
   .auto-video-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
   .auto-video-row .btn-reset { flex-shrink: 0; }
   #video-auto-hint a { color: var(--accent-light); text-decoration: none; word-break: break-all; }
@@ -365,6 +368,7 @@
 </div>
 
 <!-- Канал А: песни из чата, которых нет в базе (пассивный баннер) -->
+<div class="build-status" id="build-status" style="display:none"></div>
 <div class="top-alert" id="top-alert" style="display:none"></div>
 
 <!-- ── Собирается само ─────────────────────────────────────────────────────── -->
@@ -488,6 +492,7 @@ let catalog = [];
 let selection = null;
 let manifest = null;
 let songImages = {};   // {number: path} — songs backed by a picture asset
+let buildStatus = {};   // last Mac-build status (channel А, /api/build-status)
 
 // progItems: {time, title, note, is_practice_end, _source:'telegram'|'override'|'manual', _dirty, _llm_uncertain}
 let progItems = [];
@@ -509,10 +514,11 @@ const SAVE_DELAY = 1200;
 async function init() {
   setSave('idle', '☁ авто-сохранение');
   try {
-    [catalog, selection, songImages] = await Promise.all([
+    [catalog, selection, songImages, buildStatus] = await Promise.all([
       fetch('/api/catalog').then(r => r.json()).catch(() => []),
       fetch('/api/selection').then(r => r.json()).catch(() => null),
       fetch('/api/song-images').then(r => r.json()).catch(() => ({})),
+      fetch('/api/build-status').then(r => r.json()).catch(() => ({})),
     ]);
   } catch { setSave('error', '✗ нет связи'); }
 
@@ -543,6 +549,7 @@ function loadForm() {
   renderAutoMoney();
   document.getElementById('song-cards').innerHTML = '';
   (sel.song_numbers || []).forEach(renderSongCard);   // only the operator's own pick — never silent-prefill
+  renderBuildStatus();     // channel А: last-build status line
   renderSongSuggest();     // suggestion line + [Применить]
   renderTopAlert();        // channel А: chat songs not in base
 
@@ -920,6 +927,21 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeSongPicker();
 });
 // ТГ-suggestion note + a roll-up of numbers with no image AND no catalog text.
+// Канал А (статус-строка): последняя сборка + вердикт из /api/build-status.
+function renderBuildStatus() {
+  const el = document.getElementById('build-status');
+  if (!el) return;
+  const s = buildStatus || {};
+  if (!s.ts) { el.style.display = 'none'; return; }
+  const srcs = [['program','программа'],['money','деньги'],['video','видео'],['news','новости'],['deploy','деплой']];
+  const failed = srcs.filter(([k]) => s[k] && s[k].ok === false).map(([, label]) => label);
+  const date = String(s.ts).replace('T', ' ').slice(0, 16);
+  const verdict = failed.length ? ('⚠️ не потянулось: ' + failed.join(', ')) : '✅ всё собралось';
+  el.style.display = '';
+  el.className = 'build-status ' + (failed.length ? 'bad' : 'ok');
+  el.innerHTML = 'Последняя сборка: <b>' + x(date) + '</b> · ' + x(verdict);
+}
+
 // Канал А (верхний баннер): номера из чата, которых НЕТ ни в картинках, ни в каталоге.
 function renderTopAlert() {
   const el = document.getElementById('top-alert');
