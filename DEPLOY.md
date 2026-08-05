@@ -190,10 +190,25 @@ convert → rsync в обе папки. Эндпоинт подхватит на
 Три слоя надёжности: **launchd** (основной) + **pmset** (будильник) + **alias** (ручной резерв).
 
 ### 2.1 Скрипт прожига — `build/weekly.sh` (в репо, chmod +x)
-Собирает manifest (`build_manifest.py`) и rsync-ит ТОЛЬКО `data/manifest.json` в `dist/manifest.json`
-на VPS (сервер отдаёт из dist, НЕ из data). Пути к venv и SSH-ключу — **абсолютные**: launchd
-запускает скрипт в урезанном окружении без shell-переменных. Идемпотентен, лог `~/dc-deck-build.log`.
-Вручную: `bash build/weekly.sh`.
+weekly.sh лишь запускает `build/build_manifest.py`, который делает ВСЁ:
+- собирает manifest (Telegram/Airtable/Groq → `data/manifest.json`);
+- **деплоит** сам: `data/manifest.json → dist/manifest.json` и
+  `data/last_build_status.json → data/` на VPS (сервер отдаёт дек из dist);
+- пишет `data/last_build_status.json` (статус каждого источника + `deploy` + `ts`);
+- **шлёт сводку прожига** — Telegram (полная) + macOS (светофор), см. §2.7.
+
+Пути к venv/ключу — **абсолютные** (launchd — урезанное окружение). Лог `~/dc-deck-build.log`.
+Вручную: `bash build/weekly.sh` (или `dcbuild`). `DC_NO_DEPLOY=1` — собрать без заливки на VPS.
+
+### 2.7 Сводка прожига — 3 канала (детали в DECK-CONTRACT.md)
+После сборки `build_manifest` отчитывается:
+- **Telegram** (`TELEGRAM_ALERT_CHAT` в `.env`) — полная сводка ✅/❌/⚠️ по источникам, КАЖДЫЙ прожиг;
+- **macOS** — короткий светофор (✅ успех / ❌ сбой / ⚠️ новая песня), КАЖДЫЙ прожиг;
+- **форма** `/api/operator` — строка «Последняя сборка … ✅/⚠️» из `GET /api/build-status`.
+
+Статус прожига шлётся каждый раз; флаг «новая песня №N» — один раз на номер (`build/alerted_songs.json`).
+Любой источник упал → ❌ в сводке, но прожиг ЗАВЕРШАЕТСЯ (не краш). Нет `TELEGRAM_ALERT_CHAT` →
+Telegram-канал пропускается, остальные работают.
 
 ### 2.2 launchd — основной планировщик (наверстывает пропуск при пробуждении)
 Почему launchd, а не cron: если Мак спал в субботу 12:00, launchd **выполнит пропущенную задачу
