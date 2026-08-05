@@ -14,6 +14,8 @@
   "panel_radius": "14px",
   "news_panel_bg": "#EDE8DF",
   "news_panel_text": "#12141f",
+  "featured_bg": "#2A211A",
+  "featured_border": "#C9773D",
   "footer_opening_bg": "#C0392B",
   "footer_continuation_bg": "#2D5A8E"
 }

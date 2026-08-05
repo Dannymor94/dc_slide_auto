@@ -26,6 +26,8 @@
       --panel-radius:            14px;
       --news-panel-bg:           #EDE8DF;
       --news-panel-text:         #12141f;
+      --featured-bg:             #2A211A;
+      --featured-border:         #C9773D;
       --footer-opening-bg:       #C0392B;
       --footer-continuation-bg:  #2D5A8E;
     }
@@ -178,6 +180,21 @@
     .news-panel-list li:not(:last-child) { border-bottom: 1px solid rgba(18,20,31,0.07); }
     .news-panel-empty    { font-size: 0.88rem; color: rgba(18,20,31,0.45); font-style: italic; }
 
+    /* featured (important) news: accent callout between news panel and jha zone.
+       natural height, does not grow; absent → element not rendered at all */
+    .info-featured-panel {
+      flex: 0 0 auto;
+      background: var(--featured-bg, #2A211A);
+      border: 1px solid var(--featured-border, #C9773D);
+      border-left: 4px solid var(--featured-border, #C9773D);
+      border-radius: var(--panel-radius, 14px);
+      padding: 0.7rem 1rem;
+      margin-right: 0.7rem;    /* align with the news panel's right breathing room */
+    }
+    .featured-list    { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+    .featured-list li { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.92rem; line-height: 1.35; color: var(--text-main); }
+    .featured-icon    { color: var(--featured-border, #C9773D); flex-shrink: 0; font-size: 0.95rem; line-height: 1.4; }
+
     /* bottom zone: default 50% of right column, shrinks when news grows, pinned to bottom */
     /* position:relative so the speech bubble can float over the right (QR) area */
     .info-bottom {
@@ -299,8 +316,25 @@
 
     /* ── VIDEO slide ── */
     /* gap instead of iframe margin-top so the row never overflows and clips the link */
-    .slide-video { grid-template-rows: auto 1fr auto; gap: 0.8rem; }
+    .slide-video { grid-template-rows: auto 1fr auto; gap: 0.8rem; position: relative; }
     .slide-video iframe { width: 100%; height: 100%; border: none; border-radius: 6px; }
+
+    /* On-slide nav arrows for iframe slides: the YouTube iframe swallows arrow KEYS
+       once focused, but never mouse clicks on a parent element stacked above it.
+       These buttons sit in the dark padding at each edge → click = prev/next slide. */
+    .slide-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      z-index: 5;
+      width: 3.2rem; height: 3.2rem; border-radius: 50%;
+      background: rgba(20,22,31,0.6); color: #fff;
+      border: 1px solid rgba(255,255,255,0.22);
+      font-size: 1.9rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0.5; transition: opacity 0.15s; padding: 0 0 0.15rem;
+    }
+    .slide-nav:hover { opacity: 1; }
+    .slide-nav-prev { left: 0.7rem; }
+    .slide-nav-next { right: 0.7rem; }
     /* fallback: a real button, always fully visible — the way out when YouTube refuses to embed */
     .video-fallback {
       justify-self: start;
@@ -338,8 +372,145 @@
     }
 
     /* ── MUSIC slide ── */
-    .slide-music { grid-template-rows: auto 1fr auto; gap: 0.8rem; }
+    .slide-music { grid-template-rows: auto 1fr auto; gap: 0.8rem; position: relative; }
     .slide-music iframe { width: 100%; height: 100%; border: none; border-radius: 6px; }
+
+    /* ── Corner controls: unobtrusive, never cover slide content ── */
+    .dc-corner-btns {
+      position: fixed; top: 0.7rem; right: 0.8rem; z-index: 9998;
+      display: flex; gap: 0.4rem;
+    }
+    .dc-corner-btn {
+      width: 2rem; height: 2rem; border-radius: 50%;
+      background: rgba(30,32,48,0.55); color: var(--text-muted);
+      border: 1px solid rgba(255,255,255,0.12);
+      font-size: 1rem; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0.4; transition: opacity 0.15s, color 0.15s;
+      font-family: var(--font-body);
+    }
+    .dc-corner-btn:hover { opacity: 1; color: var(--text-main); }
+    /* play = start the show (fullscreen + slide 1); accented so it reads as primary.
+       SVG triangle (centroid at the viewBox centre) → perfectly centred in the circle. */
+    .dc-play-btn {
+      background: var(--accent); color: #fff; border-color: transparent;
+      opacity: 0.85;
+    }
+    .dc-play-btn:hover { opacity: 1; color: #fff; }
+    .dc-play-btn svg { display: block; }
+    /* in the show (fullscreen) the play/help buttons are redundant — only ⛶ (exit) stays */
+    body.dc-fs .dc-help-btn,
+    body.dc-fs .dc-play-btn { display: none; }
+
+    /* ── Hotkeys help panel ── */
+    .dc-help {
+      position: fixed; inset: 0; z-index: 10001;
+      background: rgba(10,11,16,0.72);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-body);
+    }
+    .dc-help[hidden] { display: none; }
+    .dc-help-card {
+      background: var(--bg-card); color: var(--text-main);
+      border: 1px solid var(--accent);
+      border-radius: 16px; padding: 1.6rem 2rem; min-width: 280px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .dc-help-card h3 { color: var(--accent); font-size: 1.05rem; margin: 0 0 1rem; }
+    .dc-help-dl { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.3rem; }
+    .dc-help-dl > div { display: flex; align-items: baseline; gap: 0.9rem; }
+    .dc-help-key {
+      flex-shrink: 0; min-width: 3.4rem; text-align: center;
+      background: var(--slide-bg); border: 1px solid rgba(201,119,61,0.4);
+      border-radius: 6px; padding: 0.2rem 0.5rem;
+      font-size: 0.82rem; font-weight: 700; color: var(--accent-light);
+    }
+    .dc-help-desc { font-size: 0.9rem; color: var(--text-main); }
+    .dc-help-close {
+      width: 100%; background: none; border: 1px solid rgba(201,119,61,0.35);
+      border-radius: 8px; color: var(--text-muted); font-family: inherit;
+      font-size: 0.85rem; padding: 0.5rem; cursor: pointer;
+    }
+    .dc-help-close:hover { color: var(--text-main); border-color: var(--accent); }
+
+    /* ── Slide filmstrip (bottom thumbnails) ── */
+    :root { --strip-h: 122px; }
+    /* deck shrinks above the strip → thumbnails never cover slide content (normal mode).
+       In fullscreen the strip is removed and the deck reclaims full height. */
+    body.dc-strip-on .reveal { height: calc(100% - var(--strip-h)); }
+    .dc-filmstrip {
+      position: fixed; left: 0; right: 0; bottom: 0; height: var(--strip-h);
+      z-index: 9997;
+      display: flex; gap: 0.5rem; align-items: center;
+      padding: 0.5rem 0.7rem;
+      background: rgba(12,13,20,0.94);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      overflow-x: auto; overflow-y: hidden;
+    }
+    .dc-filmstrip.hidden { display: none; }
+    .dc-thumb {
+      flex: 0 0 auto; position: relative;
+      padding: 0; border: 2px solid transparent; border-radius: 6px;
+      background: var(--slide-bg); overflow: hidden; cursor: pointer; outline: none;
+    }
+    .dc-thumb:hover { border-color: rgba(201,119,61,0.55); }
+    .dc-thumb.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .dc-thumb-inner { transform-origin: top left; pointer-events: none; overflow: hidden; }
+    .dc-thumb-num {
+      position: absolute; bottom: 2px; left: 3px; z-index: 2;
+      font-size: 0.6rem; font-weight: 700; color: #fff;
+      background: rgba(0,0,0,0.55); border-radius: 3px; padding: 0 0.25rem; pointer-events: none;
+    }
+    .dc-thumb-iframe {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      background: #000; color: var(--accent-light); font-size: 4rem;
+    }
+
+    /* ── Cinema mode: fills the viewport with a PLAYING video (or a shown song image).
+       The deck keeps the keyboard (focusin→blur), so arrows still switch slides;
+       YouTube's own controls appear on hover/pause. No cross-origin fullscreen trap. ── */
+    .cinema-fill {
+      position: fixed; inset: 0;
+      width: 100vw; height: 100vh;
+      z-index: 6000; border-radius: 0; background: #000;
+    }
+    /* .slide-song-image img sets position/z-index at equal specificity — restate the
+       fill on img.cinema-fill (defined later → wins the tie). contain = sheet shown whole. */
+    img.cinema-fill {
+      position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 6000;
+      object-fit: contain; max-width: none; max-height: none; background: #000;
+    }
+    /* Reveal keeps transform + perspective on .slides; ANY of transform/perspective/
+       filter on an ancestor traps position:fixed (it anchors to that ancestor, not the
+       viewport). Neutralize them while cinema is on so the video truly fills the screen —
+       the un-scaled slides underneath are fully covered by the cinema video, and Reveal
+       re-applies its transform on exit (exitCinema → Reveal.layout()). */
+    body.dc-cinema .reveal .slides,
+    body.dc-cinema .reveal .slides > section.present {
+      transform: none !important;
+      perspective: none !important;
+      filter: none !important;
+    }
+    /* clean screen while a video plays */
+    body.dc-cinema .dc-filmstrip,
+    body.dc-cinema .dc-corner-btns { display: none; }
+    /* in cinema only the media shows — hide the slide's own chrome (label, fallback
+       link, in-slide nav arrows) so nothing peeks over the full-screen video/image */
+    body.dc-cinema .slide-video > *:not(.yt-embed),
+    body.dc-cinema .slide-music > *:not(.yt-embed),
+    body.dc-cinema .slide-song-image > *:not(.cinema-fill) { display: none; }
+    /* overlay UI above the cinema video: edge nav arrows only (no caption) */
+    .dc-cinema-ui { position: fixed; inset: 0; z-index: 6001; pointer-events: none; }
+    .dc-cinema-ui[hidden] { display: none; }
+    .dc-cinema-ui .slide-nav { pointer-events: auto; }   /* only arrows catch clicks; player stays clickable */
+
+    /* Auto-hide interactive controls + cursor when the mouse sits still during the
+       show (deck fullscreen). Any mouse/key/touch activity brings them back. The
+       slide-caption stays; only the controls fade. */
+    .dc-corner-btns { transition: opacity 0.3s; }
+    body.dc-fs.dc-idle { cursor: none; }
+    body.dc-fs.dc-idle .dc-cinema-ui .slide-nav,
+    body.dc-fs.dc-idle .dc-corner-btns { opacity: 0; pointer-events: none; }
   </style>
 </head>
 <body>
@@ -348,6 +519,38 @@
       <section><p class="dc-stub" style="padding:2rem">Загрузка…</p></section>
     </div>
   </div>
+
+  <!-- Corner controls: start show (fullscreen + slide 1) · fullscreen toggle · hotkeys help -->
+  <div class="dc-corner-btns">
+    <button class="dc-corner-btn dc-play-btn" id="dc-play-btn" title="Начать показ (во весь экран)" aria-label="Начать показ"><svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8.5 5 L19 12 L8.5 19 Z" fill="currentColor"/></svg></button>
+    <button class="dc-corner-btn dc-fs-btn" id="dc-fs-btn" title="Полный экран (F)" aria-label="Полный экран">⛶</button>
+    <button class="dc-corner-btn dc-help-btn" id="dc-help-btn" title="Горячие клавиши (?)" aria-label="Справка">?</button>
+  </div>
+
+  <!-- Hotkeys help panel (hidden by default) -->
+  <div class="dc-help" id="dc-help" hidden>
+    <div class="dc-help-card">
+      <h3>Горячие клавиши</h3>
+      <div class="dc-help-dl">
+        <div><span class="dc-help-key">F</span><span class="dc-help-desc">полный экран</span></div>
+        <div><span class="dc-help-key">← →</span><span class="dc-help-desc">переключение слайдов</span></div>
+        <div><span class="dc-help-key">Esc</span><span class="dc-help-desc">обзор всех слайдов</span></div>
+        <div><span class="dc-help-key">T</span><span class="dc-help-desc">лента слайдов</span></div>
+        <div><span class="dc-help-key">?</span><span class="dc-help-desc">эта справка</span></div>
+      </div>
+      <button class="dc-help-close" id="dc-help-close">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- Slide filmstrip: visible in normal mode, auto-hidden in fullscreen, toggled by T -->
+  <div class="dc-filmstrip" id="dc-filmstrip"></div>
+
+  <!-- Cinema overlay: shown while a video plays — slide label + nav arrows over the video -->
+  <div class="dc-cinema-ui" id="dc-cinema-ui" hidden>
+    <button class="slide-nav slide-nav-prev" onclick="Reveal.prev()" aria-label="Предыдущий слайд" tabindex="-1">‹</button>
+    <button class="slide-nav slide-nav-next" onclick="Reveal.next()" aria-label="Следующий слайд" tabindex="-1">›</button>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
   <script type="module" src="boot.js"></script>
 </body>

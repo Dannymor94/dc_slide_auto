@@ -206,6 +206,19 @@
   }
   .btn-add-news:hover { border-color: var(--success); }
 
+  /* Featured (important) news — accent flavour of the news editor */
+  .badge-featured { background: rgba(201,119,61,0.14); color: var(--accent-light); border: 1px solid rgba(201,119,61,0.35); }
+  .news-item.is-featured { border-color: rgba(201,119,61,0.4); background: rgba(201,119,61,0.04); }
+  .featured-mark { padding: 0.5rem 0.4rem 0.5rem 0.55rem; color: var(--accent); flex-shrink: 0; font-size: 0.95rem; }
+  .btn-add-featured {
+    width: 100%; margin-top: 0.5rem;
+    background: none; border: 1px dashed rgba(201,119,61,0.4);
+    border-radius: 8px; color: var(--accent-light);
+    font-size: 0.78rem; font-family: inherit; padding: 0.45rem;
+    cursor: pointer; transition: border-color 0.15s;
+  }
+  .btn-add-featured:hover { border-color: var(--accent); }
+
   /* ── Dada ────────────────────────────────────────────────────────────────── */
   .dada-auto {
     font-size: 0.74rem; color: var(--text-muted); font-style: italic;
@@ -401,6 +414,15 @@
     <div class="news-list" id="news-list"></div>
     <button class="btn-add-news" onclick="addManualNews()">+ добавить новость вручную</button>
 
+    <!-- Выделенное (важное): ручной акцентный блок на деке, overrides.featured_news -->
+    <div class="sub-head" style="margin-top:1.1rem">
+      <span class="sub-label">⚡ Выделенное (важное)</span>
+      <span class="badge badge-featured">на деке — акцентом</span>
+    </div>
+    <div class="news-list" id="featured-list"></div>
+    <button class="btn-add-featured" onclick="addFeatured()">+ добавить выделенную</button>
+    <div class="field-hint">Отдельный акцентный блок в деке, под обычными новостями. Пусто — блока нет.</div>
+
     <hr class="sub-sep">
 
     <!-- Дада -->
@@ -504,6 +526,8 @@ let practiceEnd = null;   // "HH:MM" of the boundary item (overrides.practice_en
 let newsAuto = [];
 let newsAutoOverridden = false;
 let newsManual = [];
+// featuredNews: manual-only accent block (overrides.featured_news), separate from news
+let featuredNews = [];
 
 let saveTimer = null;
 let dragSrc = null;
@@ -579,9 +603,11 @@ function loadForm() {
     newsAutoOverridden = false;
   }
   newsManual = (ov.news_manual || []).map(t => ({ text: t }));
+  featuredNews = (ov.featured_news || []).map(t => ({ text: t }));
 
   renderProgram();
   renderNews();
+  renderFeatured();
   updateAutoMeta();
 }
 
@@ -757,6 +783,41 @@ function resetNews() {
   newsAutoOverridden = false;
   newsManual = [];
   renderNews(); updateAutoMeta(); scheduleSave();
+}
+
+// ── Featured (important) news — manual-only accent block ─────────────────────────
+// Lives in overrides.featured_news; separate from news / news_manual. Survives
+// manifest rebuild (it's in selection). Empty → deck hides the block entirely.
+function renderFeatured() {
+  const list = document.getElementById('featured-list');
+  list.innerHTML = '';
+  featuredNews.forEach((item, idx) => list.appendChild(makeFeaturedEl(item.text, idx)));
+}
+
+function makeFeaturedEl(text, idx) {
+  const div = document.createElement('div');
+  div.className = 'news-item is-featured';
+  div.innerHTML = `
+    <span class="featured-mark">⚡</span>
+    <input class="news-inp" type="text" value="${x(text)}" placeholder="Важная новость">
+    <button class="btn-del">✕</button>`;
+  div.querySelector('.news-inp').addEventListener('input', e => {
+    featuredNews[idx].text = e.target.value;
+    scheduleSave();
+  });
+  div.querySelector('.btn-del').addEventListener('click', () => {
+    featuredNews.splice(idx, 1);
+    renderFeatured(); scheduleSave();
+  });
+  return div;
+}
+
+function addFeatured() {
+  featuredNews.push({ text: '' });
+  renderFeatured();
+  const inps = document.querySelectorAll('#featured-list .news-inp');
+  if (inps.length) inps[inps.length - 1].focus();
+  scheduleSave();
 }
 
 function resetDada() {
@@ -1116,6 +1177,7 @@ async function doSave() {
   const hasNewsChanges = newsAutoOverridden || newsAuto.some(n => n._dirty);
   const newsOv    = hasNewsChanges ? newsAuto.map(n => n.text) : null;
   const manualArr = newsManual.map(n => n.text).filter(Boolean);
+  const featuredArr = featuredNews.map(n => n.text).filter(Boolean);
 
   const body = {
     week_date:    selection?.week_date ?? new Date().toISOString().slice(0, 10),
@@ -1125,11 +1187,12 @@ async function doSave() {
     raised:       parseInt(document.getElementById('raised').value, 10) || null,
     plan:         parseInt(document.getElementById('plan').value,   10) || null,
     overrides: {
-      program:      progOv,
-      news:         newsOv,
-      news_manual:  manualArr.length ? manualArr : null,
-      practice_end: practiceEnd || null,
-      dada_comment: document.getElementById('ov-dada').value.trim() || null,
+      program:       progOv,
+      news:          newsOv,
+      news_manual:   manualArr.length ? manualArr : null,
+      featured_news: featuredArr.length ? featuredArr : null,
+      practice_end:  practiceEnd || null,
+      dada_comment:  document.getElementById('ov-dada').value.trim() || null,
     },
   };
 

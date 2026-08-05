@@ -33,6 +33,9 @@ _archive_dc-deck/
 *.pdf
 scratchpad/
 
+# ── Local preview harness (mock-data deck; dev only, never deployed) ──
+deck/preview*.html
+
 # ── Song images: heavy PNG sources (from the PDF) stay local; only the light
 #    webp deliverables are tracked (deck ships them; deploy carries them). ──
 deck/assets/songs/*.png

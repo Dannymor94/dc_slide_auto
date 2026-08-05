@@ -138,7 +138,7 @@ def get_selection():
             "final_video_url": "",
             "raised": None,
             "plan": None,
-            "overrides": {"program": None, "news": None, "news_manual": None, "practice_end": None, "dada_comment": None},
+            "overrides": {"program": None, "news": None, "news_manual": None, "featured_news": None, "practice_end": None, "dada_comment": None},
         }
     return {
         "week_date": row[0].isoformat() if hasattr(row[0], 'isoformat') else str(row[0]),
@@ -147,7 +147,7 @@ def get_selection():
         "final_video_url": row[3] or "",
         "raised": row[4],
         "plan": row[5],
-        "overrides": row[6] or {"program": None, "news": None, "news_manual": None, "practice_end": None, "dada_comment": None},
+        "overrides": row[6] or {"program": None, "news": None, "news_manual": None, "featured_news": None, "practice_end": None, "dada_comment": None},
     }
 
 @app.post("/api/selection")
@@ -159,7 +159,7 @@ async def post_selection(request: Request, _: str = Depends(require_auth)):
     final_video_url = body.get("final_video_url", "")
     raised = body.get("raised")
     plan = body.get("plan")
-    overrides = body.get("overrides", {"program": None, "news": None, "news_manual": None, "practice_end": None, "dada_comment": None})
+    overrides = body.get("overrides", {"program": None, "news": None, "news_manual": None, "featured_news": None, "practice_end": None, "dada_comment": None})
 
     try:
         with get_conn() as conn:

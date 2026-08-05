@@ -19,6 +19,9 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
     ...p, is_practice_end: !!practice_end && p.time === practice_end,
   }));
   const news = [...(ov.news ?? manifest.news ?? []), ...(ov.news_manual ?? [])];
+  // featured_news: manual-only accent block, separate from news / news_manual.
+  // Lives in selection.overrides → survives manifest rebuild. Empty → block hidden.
+  const featured_news = ov.featured_news ?? [];
   const dada_comment = ov.dada_comment ?? manifest.dada_comment ?? DEFAULT_DADA;
   const final_music_url = manifest.final_music_url ?? null;
 
@@ -64,6 +67,7 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
     program,
     continuation_program,
     news,
+    featured_news,
     dada_comment,
     final_music_url,
     final_video_url,

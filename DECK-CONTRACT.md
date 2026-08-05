@@ -42,6 +42,7 @@
     "program": null,
     "news": null,
     "news_manual": null,
+    "featured_news": null,
     "practice_end": null,
     "dada_comment": null
   }
@@ -51,6 +52,7 @@
 - `song_numbers` — номера из каталога; резолвятся в карточки/слайды.
 - `video_url` — пусто → слайд «видео нет».
 - `overrides.*` — `null` = берём авто из manifest; не-`null` = ручная правка перекрывает.
+- `overrides.featured_news` — список строк, **только вручную** (форма → раздел новостей → «⚡ Выделенное (важное)»). Отдельный акцентный блок на info-слайде под обычными новостями; **не смешивается** с `news`/`news_manual` и авто-новостями. Пусто/`null` → блок не показывается. Живёт в `selection`, переживает пересборку manifest (как `news_manual`).
 
 ## Слой 3 — `theme.json` (репозиторий, редко)
 
@@ -71,8 +73,9 @@
 program      = overrides.program      ?? manifest.program
 practice_end = overrides.practice_end                 // "HH:MM" границы кол. части; пункт с этим time → is_practice_end=true (накладывается на program, НЕ хранится в нём). Пусто/нет совпадения → continuation показывает всё
 continuation = program после пункта-границы (см. practice_end)
-news         = overrides.news         ?? manifest.news
-dada_comment = overrides.dada_comment ?? manifest.dada_comment ?? DEFAULT_DADA
+news          = overrides.news         ?? manifest.news
+featured_news = overrides.featured_news ?? []   // ручной акцентный блок (info-слайд, под новостями); пусто → блока нет. Цвет рамки/фона → theme.featured_border / theme.featured_bg
+dada_comment  = overrides.dada_comment ?? manifest.dada_comment ?? DEFAULT_DADA
 songs        = resolve(selection.song_numbers)   // приоритет картинки: assets/songs/N.{webp,png,jpg} есть → image_path; иначе текст из каталога → stanzas; иначе заглушка «№N нет»
              // форма: manifest.suggested_songs показывается как «Предложено из чата … [Применить]» (не авто-префилл, не затирает выбор). Номер из чата без картинки И без текста → «новая песня, нет в базе» → уведомления (см. «Новая песня»)
 video        = selection.video_url || manifest.video_url  // форма-оверрайд → авто из СВАДХЬЯЯ (свежая youtube-ссылка); пусто → слайд-заглушка «видео от Дады не будет»

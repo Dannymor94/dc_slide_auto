@@ -15,6 +15,15 @@ function newsList(news) {
   return `<ul class="news-panel-list">${news.map(n => `<li>${n}</li>`).join('')}</ul>`;
 }
 
+// Accent block for hand-picked important news. No caption — just a visually
+// distinct block. Empty → returns '' so the slot stays empty (no block).
+function featuredBlock(items) {
+  if (!items || items.length === 0) return '';
+  const lis = items.map(t =>
+    `<li><span class="featured-icon">⚡</span><span>${t}</span></li>`).join('');
+  return `<div class="info-featured-panel"><ul class="featured-list">${lis}</ul></div>`;
+}
+
 function progressPanel(raised, plan) {
   if (!plan || plan <= 0) return '';
   const pct = Math.min(100, Math.round((raised ?? 0) / plan * 100));
@@ -97,7 +106,9 @@ export function infoSlide(effective, mode) {
       </div>
     </div>`;
 
-  const right = `<div class="info-right">${newsPanel}${bottom}</div>`;
+  // right column: news panel → featured accent block (fills the gap) → jha/QR zone
+  const featured = featuredBlock(effective.featured_news);
+  const right = `<div class="info-right">${newsPanel}${featured}${bottom}</div>`;
 
   return `<section class="dc-slide slide-info">${left}${right}</section>`;
 }
