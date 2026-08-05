@@ -1,97 +1,165 @@
 #!/usr/bin/env python3
-"""Assemble data/manifest.json (Mac build-side).
+"""Assemble data/manifest.json, deploy it to the VPS, collect a per-source build
+STATUS, and report the run over three channels (see song_alerts): Telegram summary
+(Б) + macOS traffic-light (В), plus the form status line (А) via the delivered
+data/last_build_status.json.
 
-Sources this build manages (all independent — one failing never blocks another):
-    news            ← fetch_news()                     (M3, Airtable)
-    program         ← extract_program(TG program post) (M2, Groq — single LLM point)
-    raised / plan   ← extract_progress(TG finance post)(M2, regex — deterministic)
-    video_url       ← fetch_dada_video(СВАДХЬЯЯ chat)   (M2, newest YouTube link)
+Every source degrades independently — a failed source becomes ❌ in the status and
+NEVER crashes the build. The build always completes and always reports.
 
-Program & finance come from the Rostov Unit chat; the Dada video from the
-СВАДХЬЯЯ chat — both via Telethon (reused Crosspost session).
-
-Safety:
-    - Rostov Telethon unavailable (connected=False) → program & progress LEFT
-      UNTOUCHED (don't wipe good data on a misconfig / transient error).
-    - Connected but a post not found → that field emptied + warning.
-    - video_url: any failure / no link in window → "" (the deck shows its
-      «видео от Дады не будет» stub; empty video is a valid state, unlike program).
-
-date / dada_comment / final_music_url assembly stays out of scope and preserved.
-All sources degrade gracefully and never raise; the build always completes.
+Deploy lives here (not weekly.sh) so `status.deploy` is truthful; set DC_NO_DEPLOY=1
+to build + report without touching the VPS (local testing).
 """
 import json
+import os
+import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from extract_program import extract_program
 from extract_progress import extract_progress
 from fetch_news import fetch_news
 from fetch_telegram import fetch_dada_video, fetch_posts
-from song_alerts import notify_new_songs
+from song_alerts import find_new_songs, report_build
 
-MANIFEST_PATH = Path(__file__).parent.parent / "data" / "manifest.json"
+ROOT = Path(__file__).parent.parent
+MANIFEST_PATH = ROOT / "data" / "manifest.json"
+STATUS_PATH = ROOT / "data" / "last_build_status.json"
+MSK = ZoneInfo("Europe/Moscow")
+
+# ── deploy target (kept here so status.deploy reflects the real rsync) ───────────
+VPS = "root@147.45.251.134"
+SSH_E = f"ssh -p 2222 -i {os.path.expanduser('~/.ssh/vnedrum')} -o BatchMode=yes"
+DIST = "/opt/projects/dc-deck/dist"
+VPS_DATA = "/opt/projects/dc-deck/data"
 
 
-def _guard(fn, fallback, label):
-    """Run fn(); on any unexpected exception warn and return fallback (never crash)."""
-    try:
-        return fn()
-    except Exception as e:
-        print(f"[warn] build_manifest: {label} упал ({e}) — использую пустое значение.",
-              file=sys.stderr)
-        return fallback
+def _ok(value):
+    return {"ok": True, "value": value, "error": None}
+
+
+def _fail(error):
+    return {"ok": False, "value": None, "error": str(error)[:180]}
+
+
+def _rsync(local: Path, remote: str) -> None:
+    r = subprocess.run(["rsync", "-az", "-e", SSH_E, str(local), f"{VPS}:{remote}"],
+                       capture_output=True, text=True, timeout=90)
+    if r.returncode != 0:
+        raise RuntimeError((r.stderr or r.stdout).strip()[:180] or f"rsync rc={r.returncode}")
 
 
 def main() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text())
+    status = {"program": None, "money": None, "video": None, "news": None,
+              "songs": None, "deploy": None, "ts": None}
 
-    # ── News (M3) ──
-    manifest["news"] = _guard(fetch_news, [], "fetch_news")
+    # ── News (Airtable) ──
+    try:
+        news = fetch_news()
+        manifest["news"] = news
+        status["news"] = _ok(str(len(news)))
+    except Exception as e:
+        status["news"] = _fail(e)
+        print(f"[warn] news: {e}", file=sys.stderr)
 
-    # ── Program + progress (M2, Rostov Unit) ──
-    posts = _guard(fetch_posts,
-                   {"connected": False, "program": None, "finance": None, "songs": []},
-                   "fetch_posts")
+    # ── Rostov Unit: program + money + song numbers ──
+    try:
+        posts = fetch_posts()
+    except Exception as e:
+        posts = {"connected": False, "program": None, "finance": None, "songs": []}
+        print(f"[warn] fetch_posts: {e}", file=sys.stderr)
+
     if not posts["connected"]:
-        print("[warn] build_manifest: Telethon (Rostov) недоступен — программу и прогресс не трогаю.",
-              file=sys.stderr)
+        # don't wipe good manifest data on a transient/misconfig failure
+        status["program"] = _fail("Telethon (Rostov) недоступен")
+        status["money"] = _fail("Telethon (Rostov) недоступен")
+        status["songs"] = {"suggested": [], "missing": []}
+        print("[warn] Telethon (Rostov) недоступен — программу/деньги не трогаю.", file=sys.stderr)
     else:
+        # program
         if posts["program"]:
-            manifest["program"] = _guard(
-                lambda: extract_program(posts["program"]), [], "extract_program")
+            try:
+                prog = extract_program(posts["program"])
+                manifest["program"] = prog
+                status["program"] = _ok(f"{len(prog)} пунктов")
+            except Exception as e:
+                status["program"] = _fail(e)
+                print(f"[warn] extract_program: {e}", file=sys.stderr)
         else:
-            print("[warn] build_manifest: пост программы не найден — программа пустая.",
-                  file=sys.stderr)
             manifest["program"] = []
+            status["program"] = _fail("пост программы не найден")
 
+        # money
         if posts["finance"]:
-            prog = _guard(lambda: extract_progress(posts["finance"]),
-                          {"raised": None, "plan": None}, "extract_progress")
-            manifest["raised"], manifest["plan"] = prog["raised"], prog["plan"]
+            try:
+                pr = extract_progress(posts["finance"])
+                manifest["raised"], manifest["plan"] = pr["raised"], pr["plan"]
+                status["money"] = (_ok(f"{pr['raised']}/{pr['plan']}")
+                                   if pr["raised"] is not None
+                                   else _fail("«ДЧ донаты» не распознано"))
+            except Exception as e:
+                status["money"] = _fail(e)
+                print(f"[warn] extract_progress: {e}", file=sys.stderr)
         else:
-            print("[warn] build_manifest: пост финансов не найден — прогресс пустой.",
-                  file=sys.stderr)
             manifest["raised"], manifest["plan"] = None, None
+            status["money"] = _fail("пост финансов не найден")
 
-        # Song numbers (regex «ПС N» / «Прабхат Самгит N», no LLM) — a suggestion
-        # the operator picker prefills; connected but none found → empty list.
-        manifest["suggested_songs"] = posts.get("songs", [])
+        # song numbers (regex, no LLM)
+        songs = posts.get("songs", [])
+        manifest["suggested_songs"] = songs
+        try:
+            missing = find_new_songs(songs)
+        except Exception:
+            missing = []
+        status["songs"] = {"suggested": songs, "missing": missing}
 
-        # New-song alerts (Б Telegram + В macOS) — idempotent, independent of
-        # program/news/video; a failure here never blocks the build.
-        _guard(lambda: notify_new_songs(posts.get("songs", [])), None, "song_alerts")
+    # ── Dada video (СВАДХЬЯЯ) ──
+    try:
+        vid = fetch_dada_video()
+        manifest["video_url"] = vid["video_url"]
+        status["video"] = _ok(vid["video_url"] or "—")
+    except Exception as e:
+        status["video"] = _fail(e)
+        print(f"[warn] video: {e}", file=sys.stderr)
 
-    # ── Dada video (M2, СВАДХЬЯЯ) — independent; any failure → "" (deck shows stub) ──
-    vid = _guard(fetch_dada_video, {"connected": False, "video_url": ""}, "fetch_dada_video")
-    manifest["video_url"] = vid["video_url"]
-
-    manifest.setdefault("suggested_songs", [])   # always present (disconnected → keep prior)
+    # ── write manifest ──
+    manifest.setdefault("suggested_songs", [])
     MANIFEST_PATH.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
-    print(f"manifest обновлён: news={len(manifest.get('news', []))}, "
-          f"program={len(manifest.get('program', []))}, raised={manifest.get('raised')}, "
-          f"songs={manifest.get('suggested_songs')}, "
-          f"video_url={manifest.get('video_url') or '—'} → {MANIFEST_PATH}", file=sys.stderr)
+
+    # ── deploy manifest → VPS (status.deploy reflects THIS rsync) ──
+    if os.environ.get("DC_NO_DEPLOY"):
+        status["deploy"] = {"ok": None, "value": "skipped (DC_NO_DEPLOY)", "error": None}
+    else:
+        try:
+            _rsync(MANIFEST_PATH, f"{DIST}/manifest.json")
+            status["deploy"] = _ok("manifest → dist")
+        except Exception as e:
+            status["deploy"] = _fail(e)
+            print(f"[warn] deploy: {e}", file=sys.stderr)
+
+    status["ts"] = datetime.now(MSK).isoformat(timespec="seconds")
+
+    # ── write + deliver the status file (best-effort, for the form's А channel) ──
+    STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n")
+    if not os.environ.get("DC_NO_DEPLOY"):
+        try:
+            _rsync(STATUS_PATH, f"{VPS_DATA}/last_build_status.json")
+        except Exception as e:
+            print(f"[warn] deploy status-file: {e}", file=sys.stderr)
+
+    # ── report over channels Б (Telegram) + В (macOS) — never crashes the build ──
+    try:
+        report_build(status)
+    except Exception as e:
+        print(f"[warn] report_build: {e}", file=sys.stderr)
+
+    print("build status: " + " | ".join(
+        f"{k}={'ok' if (status.get(k) or {}).get('ok') else '—' if (status.get(k) or {}).get('ok') is None else 'FAIL'}"
+        for k in ("program", "money", "video", "news", "deploy"))
+        + f" | songs={status['songs']} | {status['ts']}", file=sys.stderr)
 
 
 if __name__ == "__main__":

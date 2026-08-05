@@ -39,3 +39,6 @@ deck/assets/songs/*.png
 
 # ── Build runtime state (Mac-side): song numbers already alerted (idempotency) ──
 build/alerted_songs.json
+
+# ── Build run status (regenerated every build, delivered to the VPS) ──
+data/last_build_status.json
