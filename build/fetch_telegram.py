@@ -263,6 +263,25 @@ def fetch_dada_video(days: int = 6) -> dict:
         return {"connected": False, "video_url": ""}
 
 
+# ── Alerts group: outgoing message over the same StringSession (NOT a bot) ───────
+def send_alert(text: str) -> bool:
+    """Send `text` to the alerts group (TELEGRAM_ALERT_CHAT) via client.send_message
+    over the reused StringSession. Returns True on success; never raises — any
+    failure → warning + False (so the build never breaks on a failed alert)."""
+    chat = _env("TELEGRAM_ALERT_CHAT")
+    if not (_creds_ok() and chat):
+        print("[warn] send_alert: нет TELEGRAM_ALERT_CHAT / creds — Telegram-алерт пропущен.",
+              file=sys.stderr)
+        return False
+    try:
+        with make_client() as client:
+            client.send_message(_coerce(chat), text)
+        return True
+    except Exception as e:
+        print(f"[warn] send_alert: ошибка отправки ({e}) — Telegram-алерт пропущен.", file=sys.stderr)
+        return False
+
+
 def main() -> None:
     posts = fetch_posts()
     print(f"[posts] connected={posts['connected']}", file=sys.stderr)

@@ -28,6 +28,7 @@ from extract_program import extract_program
 from extract_progress import extract_progress
 from fetch_news import fetch_news
 from fetch_telegram import fetch_dada_video, fetch_posts
+from song_alerts import notify_new_songs
 
 MANIFEST_PATH = Path(__file__).parent.parent / "data" / "manifest.json"
 
@@ -76,6 +77,10 @@ def main() -> None:
         # Song numbers (regex «ПС N» / «Прабхат Самгит N», no LLM) — a suggestion
         # the operator picker prefills; connected but none found → empty list.
         manifest["suggested_songs"] = posts.get("songs", [])
+
+        # New-song alerts (Б Telegram + В macOS) — idempotent, independent of
+        # program/news/video; a failure here never blocks the build.
+        _guard(lambda: notify_new_songs(posts.get("songs", [])), None, "song_alerts")
 
     # ── Dada video (M2, СВАДХЬЯЯ) — independent; any failure → "" (deck shows stub) ──
     vid = _guard(fetch_dada_video, {"connected": False, "video_url": ""}, "fetch_dada_video")
