@@ -82,7 +82,23 @@
 
     /* ── INFO slide ── */
     /* fixed % so left column is never squeezed by right-side content */
-    .slide-info { grid-template-columns: 56% 44%; gap: 1.6rem; }
+    .slide-info { grid-template-columns: 56% 44%; gap: 1.6rem; position: relative; }
+
+    /* background-music toggle: compact pill in the left column, right under the progress
+       bar. Content stays visible — music plays via a hidden player (boot.js). */
+    .info-music-btn {
+      justify-self: start; margin-top: 0.5rem;
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      background: rgba(201,119,61,0.16); color: var(--accent-light);
+      border: 1px solid rgba(201,119,61,0.4); border-radius: 999px;
+      padding: 0.32rem 0.75rem 0.32rem 0.6rem;
+      font-family: var(--font-body); font-size: 0.72rem; font-weight: 600;
+      cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    }
+    .info-music-btn:hover     { background: rgba(201,119,61,0.28); }
+    .info-music-btn.playing   { background: var(--accent); color: #fff; border-color: transparent; }
+    .info-music-btn.unavailable { opacity: 0.35; pointer-events: none; }   /* player didn't come up (no VPN) */
+    .info-music-ico { font-size: 0.8rem; line-height: 1; }
 
     /* base dark panel (greeting, progress) */
     .info-panel {

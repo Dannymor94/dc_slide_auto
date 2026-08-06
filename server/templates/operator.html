@@ -468,6 +468,10 @@
     <input type="url" id="final-video-url" placeholder="https://youtube.com/watch?v=…">
     <div class="field-hint">Запоминается навсегда: вписал один раз — живёт, пока не впишешь новую. Пусто — оставит прежнюю. Показывается последним в деке.</div>
 
+    <span class="flabel">🎵 Фоновая музыка (welcome / расписание)</span>
+    <input type="url" id="bg-music-url" placeholder="https://youtube.com/watch?v=… (можно плейлист)">
+    <div class="field-hint">Кнопка ▶ появится на слайдах приветствия и расписания — запускаешь музыку фоном, контент виден. Запоминается навсегда. Пусто — кнопки нет.</div>
+
     <span class="flabel">Сбор средств</span>
     <div class="money-row">
       <div>
@@ -567,6 +571,7 @@ function loadForm() {
   // Твоя часть
   document.getElementById('video-url').value = sel.video_url || '';
   document.getElementById('final-video-url').value = sel.final_video_url || '';
+  document.getElementById('bg-music-url').value = sel.bg_music_url || '';
   renderAutoVideo();
   document.getElementById('raised').value   = sel.raised ?? '';
   document.getElementById('plan').value     = sel.plan ?? '';
@@ -1155,6 +1160,7 @@ async function refreshAutoVideo() {
 
 document.getElementById('video-url').addEventListener('input', () => { renderAutoVideo(); scheduleSave(); });
 document.getElementById('final-video-url').addEventListener('input', scheduleSave);
+document.getElementById('bg-music-url').addEventListener('input', scheduleSave);
 document.getElementById('ov-dada').addEventListener('input',   scheduleSave);
 
 // ── Save ───────────────────────────────────────────────────────────────────────
@@ -1184,6 +1190,7 @@ async function doSave() {
     song_numbers: songNums,
     video_url:       document.getElementById('video-url').value.trim(),
     final_video_url: document.getElementById('final-video-url').value.trim(),
+    bg_music_url:    document.getElementById('bg-music-url').value.trim(),
     raised:       parseInt(document.getElementById('raised').value, 10) || null,
     plan:         parseInt(document.getElementById('plan').value,   10) || null,
     overrides: {

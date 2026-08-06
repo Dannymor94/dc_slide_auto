@@ -16,8 +16,12 @@ CREATE TABLE IF NOT EXISTS selection (
     song_numbers    INTEGER[]   NOT NULL DEFAULT '{}',
     video_url       TEXT        NOT NULL DEFAULT '',
     final_video_url TEXT        NOT NULL DEFAULT '',
+    bg_music_url    TEXT        NOT NULL DEFAULT '',
     raised          INTEGER,
     plan            INTEGER,
     overrides       JSONB       NOT NULL DEFAULT '{}'
 );
+
+-- Idempotent migration for DBs created before bg_music_url existed (runs on startup).
+ALTER TABLE selection ADD COLUMN IF NOT EXISTS bg_music_url TEXT NOT NULL DEFAULT '';
 """

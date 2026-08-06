@@ -123,7 +123,7 @@ def get_selection():
     try:
         with get_conn() as conn:
             row = conn.execute(
-                "SELECT week_date, song_numbers, video_url, final_video_url, raised, plan, overrides "
+                "SELECT week_date, song_numbers, video_url, final_video_url, raised, plan, overrides, bg_music_url "
                 "FROM selection ORDER BY week_date DESC LIMIT 1"
             ).fetchone()
     except Exception as e:
@@ -136,6 +136,7 @@ def get_selection():
             "song_numbers": [],
             "video_url": "",
             "final_video_url": "",
+            "bg_music_url": "",
             "raised": None,
             "plan": None,
             "overrides": {"program": None, "news": None, "news_manual": None, "featured_news": None, "practice_end": None, "dada_comment": None},
@@ -148,6 +149,7 @@ def get_selection():
         "raised": row[4],
         "plan": row[5],
         "overrides": row[6] or {"program": None, "news": None, "news_manual": None, "featured_news": None, "practice_end": None, "dada_comment": None},
+        "bg_music_url": row[7] or "",
     }
 
 @app.post("/api/selection")
@@ -157,6 +159,7 @@ async def post_selection(request: Request, _: str = Depends(require_auth)):
     song_numbers = body.get("song_numbers", [])
     video_url = body.get("video_url", "")
     final_video_url = body.get("final_video_url", "")
+    bg_music_url = body.get("bg_music_url", "")
     raised = body.get("raised")
     plan = body.get("plan")
     overrides = body.get("overrides", {"program": None, "news": None, "news_manual": None, "featured_news": None, "practice_end": None, "dada_comment": None})
@@ -175,19 +178,29 @@ async def post_selection(request: Request, _: str = Depends(require_auth)):
                 ).fetchone()
                 if prev:
                     final_video_url = prev[0]
+            # Background music is sticky the same way (set once, lives until changed).
+            if not (bg_music_url or "").strip():
+                prev = conn.execute(
+                    "SELECT bg_music_url FROM selection "
+                    "WHERE bg_music_url IS NOT NULL AND bg_music_url <> '' "
+                    "ORDER BY week_date DESC LIMIT 1"
+                ).fetchone()
+                if prev:
+                    bg_music_url = prev[0]
             conn.execute(
                 """
-                INSERT INTO selection (week_date, song_numbers, video_url, final_video_url, raised, plan, overrides)
-                VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+                INSERT INTO selection (week_date, song_numbers, video_url, final_video_url, bg_music_url, raised, plan, overrides)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
                 ON CONFLICT (week_date) DO UPDATE SET
                     song_numbers    = EXCLUDED.song_numbers,
                     video_url       = EXCLUDED.video_url,
                     final_video_url = EXCLUDED.final_video_url,
+                    bg_music_url    = EXCLUDED.bg_music_url,
                     raised          = EXCLUDED.raised,
                     plan            = EXCLUDED.plan,
                     overrides       = selection.overrides || EXCLUDED.overrides
                 """,
-                (week_date, song_numbers, video_url, final_video_url, raised, plan,
+                (week_date, song_numbers, video_url, final_video_url, bg_music_url, raised, plan,
                  json.dumps(overrides, ensure_ascii=False)),
             )
             conn.commit()

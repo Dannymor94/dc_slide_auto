@@ -52,6 +52,8 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
   // || (not ??) so an empty form field falls through to the auto-pulled video.
   const video_url = selection?.video_url || manifest.video_url || '';
   const final_video_url = selection?.final_video_url ?? '';
+  // sticky background music (from selection) → play/pause button on the info slides
+  const bg_music_url = selection?.bg_music_url || '';
   // three-layer: form override → manifest auto (Telegram finance post) → null
   const raised = selection?.raised ?? manifest.raised ?? null;
   const plan = selection?.plan ?? manifest.plan ?? null;
@@ -71,6 +73,7 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
     dada_comment,
     final_music_url,
     final_video_url,
+    bg_music_url,
     songs,
     video_url,
     raised,

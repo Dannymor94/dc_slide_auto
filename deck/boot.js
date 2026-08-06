@@ -100,7 +100,7 @@ async function buildSlides() {
     hash: true, transition: 'fade', controls: false, progress: false,
     keyboard: { 191: null },
   };
-  const onRevealReady = () => Reveal.initialize(revealCfg).then(() => { buildFilmstrip(); setupCinema(); });
+  const onRevealReady = () => Reveal.initialize(revealCfg).then(() => { buildFilmstrip(); setupCinema(); setupBgMusic(effective.bg_music_url); });
   if (typeof Reveal !== 'undefined') {
     onRevealReady();
   } else {
@@ -148,8 +148,8 @@ function buildFilmstrip() {
       ph.textContent = '▶';
       f.replaceWith(ph);
     });
-    // on-slide nav arrows are for the live slide only — no clutter in thumbnails
-    clone.querySelectorAll('.slide-nav').forEach(n => n.remove());
+    // on-slide nav arrows + the music button are for the live slide only — no clutter
+    clone.querySelectorAll('.slide-nav, .info-music-btn').forEach(n => n.remove());
     inner.appendChild(clone);
     btn.appendChild(inner);
 
@@ -228,9 +228,13 @@ function refreshSongCinema() {
 function onCinemaSlideChanged() {
   exitCinema();
   refreshSongCinema();
+  // background music lives only on the info slides → pause it anywhere else
+  const cur = (typeof Reveal !== 'undefined' && Reveal.getCurrentSlide?.()) || null;
+  if (!cur || !cur.classList.contains('slide-info')) pauseBg();
 }
 
 function enterCinema(el) {
+  pauseBg();   // mutual exclusion: no background music while a video/image fills the screen
   document.querySelectorAll('.cinema-fill').forEach(n => { if (n !== el) n.classList.remove('cinema-fill'); });
   el.classList.add('cinema-fill');
   document.body.classList.add('dc-cinema');
@@ -266,6 +270,68 @@ function loadYTApi(cb) {
   s.src = 'https://www.youtube.com/iframe_api';
   document.head.appendChild(s);
 }
+
+// ── Background music: a hidden YouTube player toggled by the ▶/⏸ button on the info
+// slides. Plays UNDER the visible slide (not cinema). The host is off-screen and the
+// iframe is tabindex=-1 + pointer-events:none → it can never grab arrow keys. Always
+// mutually exclusive with the video/final players (never two sounds at once). ──
+let bgPlayer = null;
+
+function setupBgMusic(url) {
+  const embed = youtubeEmbedUrl(url || '');
+  if (!embed) return;   // no/invalid url → the info button isn't rendered either
+  loadYTApi(() => {
+    // rendered but off-screen → audio plays (the toggle is a user gesture, so no
+    // autoplay block), no video is shown, and it can't take focus.
+    const host = document.createElement('div');
+    host.id = 'dc-bg-music';
+    host.style.cssText = 'position:fixed; left:-10000px; top:0; width:320px; height:180px; pointer-events:none;';
+    const iframe = document.createElement('iframe');
+    iframe.src = embed;
+    iframe.tabIndex = -1;
+    iframe.title = 'Фоновая музыка';
+    iframe.setAttribute('allow', 'autoplay; encrypted-media');
+    host.appendChild(iframe);
+    document.body.appendChild(host);
+    try {
+      bgPlayer = new YT.Player(iframe, {
+        events: {
+          onStateChange: e => syncBgButtons(e.data === 1),   // 1 = PLAYING
+          onError: () => setBgUnavailable(),
+        },
+      });
+    } catch { setBgUnavailable(); }
+  });
+}
+
+function syncBgButtons(playing) {
+  document.querySelectorAll('.info-music-btn').forEach(b => {
+    b.classList.toggle('playing', playing);
+    const ico = b.querySelector('.info-music-ico');
+    if (ico) ico.textContent = playing ? '⏸' : '▶';
+  });
+}
+
+// Player couldn't load (e.g. YouTube blocked without VPN) → button inert, slide fine.
+function setBgUnavailable() {
+  document.querySelectorAll('.info-music-btn').forEach(b => b.classList.add('unavailable'));
+}
+
+function pauseBg() { try { if (bgPlayer && bgPlayer.pauseVideo) bgPlayer.pauseVideo(); } catch {} }
+
+// Toggle from the info-slide button (global — the button uses inline onclick).
+window.dcToggleBgMusic = () => {
+  if (!bgPlayer) return;   // API not up → no-op, the slide never breaks
+  try {
+    if (bgPlayer.getPlayerState && bgPlayer.getPlayerState() === 1) {
+      bgPlayer.pauseVideo();
+    } else {
+      // mutual exclusion: silence any video/final player before starting the music
+      ytPlayers.forEach(p => { try { if (p.pauseVideo) p.pauseVideo(); } catch {} });
+      bgPlayer.playVideo();
+    }
+  } catch {}
+};
 
 // ── Presenter controls: fullscreen (start overlay + corner toggle) + hotkeys help ──
 function setupControls() {

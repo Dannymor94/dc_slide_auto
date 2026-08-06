@@ -74,7 +74,16 @@ export function infoSlide(effective, mode) {
       <span class="footer-icon">${footerIcon}</span>${footerText}
     </div>`;
 
-  // Left column: 5-row grid (row 5 = progress, collapses to 0 when absent)
+  // background-music toggle: sits in the left column flow, right UNDER the progress bar.
+  // Only when a URL is set. Plays via a hidden player (boot.js) — the slide content stays
+  // visible (not cinema). tabindex=-1 → never steals arrow keys from Reveal.
+  const musicBtn = effective.bg_music_url ? `
+      <button class="info-music-btn" onclick="window.dcToggleBgMusic&&window.dcToggleBgMusic()"
+              tabindex="-1" title="Фоновая музыка" aria-label="Фоновая музыка">
+        <span class="info-music-ico">▶</span><span class="info-music-lbl">Музыка</span>
+      </button>` : '';
+
+  // Left column: 5-row grid (row 5 = progress, collapses to 0 when absent) + music button
   const left = `
     <div class="info-left">
       ${greetingPanel}
@@ -82,6 +91,7 @@ export function infoSlide(effective, mode) {
       <div class="info-program-items">${programItems(items)}</div>
       ${footerBar}
       ${progressPanel(effective.raised, effective.plan)}
+      ${musicBtn}
     </div>`;
 
   // Right column: news panel (row 1) + jha zone (row 2)
