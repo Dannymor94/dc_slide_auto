@@ -163,6 +163,18 @@ async def post_selection(request: Request, _: str = Depends(require_auth)):
 
     try:
         with get_conn() as conn:
+            # Final video/music sticks: an empty submission never wipes it — it inherits
+            # the last non-empty value (across any week/row), so it lives until a NEW link
+            # is entered ("set once, stays until I change it manually"). Change = type a
+            # new URL; leaving the field empty keeps the previous one.
+            if not (final_video_url or "").strip():
+                prev = conn.execute(
+                    "SELECT final_video_url FROM selection "
+                    "WHERE final_video_url IS NOT NULL AND final_video_url <> '' "
+                    "ORDER BY week_date DESC LIMIT 1"
+                ).fetchone()
+                if prev:
+                    final_video_url = prev[0]
             conn.execute(
                 """
                 INSERT INTO selection (week_date, song_numbers, video_url, final_video_url, raised, plan, overrides)
