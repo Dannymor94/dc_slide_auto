@@ -281,16 +281,18 @@ function setupBgMusic(url) {
   const embed = youtubeEmbedUrl(url || '');
   if (!embed) return;   // no/invalid url → the info button isn't rendered either
   loadYTApi(() => {
-    // rendered but off-screen → audio plays (the toggle is a user gesture, so no
-    // autoplay block), no video is shown, and it can't take focus.
+    // Hidden BEHIND the (opaque) deck: full-viewport, z-index:-1. It stays in the
+    // viewport (so playback is never throttled) but is fully covered by the slide, so
+    // it's invisible even in fullscreen — unlike an off-screen host, which leaked.
     const host = document.createElement('div');
     host.id = 'dc-bg-music';
-    host.style.cssText = 'position:fixed; left:-10000px; top:0; width:320px; height:180px; pointer-events:none;';
+    host.style.cssText = 'position:fixed; left:0; bottom:0; width:240px; height:135px; z-index:-1; pointer-events:none; overflow:hidden;';
     const iframe = document.createElement('iframe');
     iframe.src = embed;
     iframe.tabIndex = -1;
     iframe.title = 'Фоновая музыка';
     iframe.setAttribute('allow', 'autoplay; encrypted-media');
+    iframe.style.cssText = 'width:100%; height:100%; border:0;';
     host.appendChild(iframe);
     document.body.appendChild(host);
     try {
