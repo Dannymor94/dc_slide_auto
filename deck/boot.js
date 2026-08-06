@@ -193,8 +193,9 @@ function setupCinema() {
         ytPlayers.push(new YT.Player(f, {
           events: { onStateChange: e => {
             if (e.data === 1) enterCinema(f);          // PLAYING → cinema
-            else if (e.data === 0) exitCinema();       // ENDED → back to slide
-            // PAUSED (2) stays in cinema so YouTube shows its controls
+            // PAUSED (2) / ENDED (0) stay in cinema: a playlist advances to the next
+            // item without a flicker, and YouTube shows its controls on pause.
+            // Cinema exits on slide change (arrows / ‹ ›) or Esc.
           } },
         }));
       } catch { /* API blocked → base embedded playback still works */ }

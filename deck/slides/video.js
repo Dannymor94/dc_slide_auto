@@ -3,13 +3,27 @@ export function youtubeEmbedUrl(url) {
     const u = new URL(url);
     let id = u.searchParams.get('v');
     if (!id && u.hostname === 'youtu.be') id = u.pathname.slice(1);
+    // Pass the playlist/mix through so it plays in order. Only PRIVATE lists can't be
+    // embedded — Liked (LL…) and Watch-Later (WL…) → drop those and play the seed video.
+    // Radio/mix (RD…) and curated playlists (PL…, UU…, OL…) embed fine in an iframe.
+    const rawList = u.searchParams.get('list');
+    const list = rawList && !/^(LL|WL)/.test(rawList) ? rawList : null;
+    if (!id && !list) return null;
     // fs=0        → hide the player's fullscreen button (its own fullscreen is a
     //               cross-origin trap: it swallows the keyboard and the deck can't
     //               regain control until it's exited). Big video = cinema mode below.
     // disablekb=1 → the focused player ignores arrow keys (no accidental seeking).
     // playsinline=1 → never take over the screen on iOS.
     // enablejsapi=1 → boot.js drives cinema mode off the player's play/pause events.
-    return id ? `https://www.youtube.com/embed/${id}?rel=0&fs=0&disablekb=1&playsinline=1&enablejsapi=1` : null;
+    const p = new URLSearchParams({ rel: '0', fs: '0', disablekb: '1', playsinline: '1', enablejsapi: '1' });
+    // pass the playlist through so it plays in order; a bare playlist (no seed video)
+    // uses the videoseries endpoint.
+    if (list) {
+      p.set('list', list);
+      const idx = u.searchParams.get('index');
+      if (idx) p.set('index', idx);
+    }
+    return `https://www.youtube.com/embed/${id || 'videoseries'}?${p.toString()}`;
   } catch {
     return null;
   }
