@@ -98,7 +98,7 @@ async function buildSlides() {
   // F (fullscreen) and arrows stay native.
   const revealCfg = {
     hash: true, transition: 'fade', controls: false, progress: false,
-    keyboard: { 191: null },
+    keyboard: { 191: null, 70: null },   // disable Reveal's own "/" help and F (we toggle F ourselves)
   };
   const onRevealReady = () => Reveal.initialize(revealCfg).then(() => { buildFilmstrip(); setupCinema(); setupBgMusic(effective.bg_music_url); });
   if (typeof Reveal !== 'undefined') {
@@ -390,6 +390,9 @@ function setupControls() {
     if (e.key === '?') { toggleHelp(); e.preventDefault(); }
     else if (e.code === 'KeyT' && !e.metaKey && !e.ctrlKey && !e.altKey) {
       stripVisible = !stripVisible; applyStrip(); e.preventDefault();
+    }
+    else if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      isFs() ? exitFs() : enterFs(); e.preventDefault();   // F toggles fullscreen (enter AND exit)
     }
     else if (e.key === 'Escape' && help && !help.hasAttribute('hidden')) {
       toggleHelp(false); e.preventDefault(); e.stopImmediatePropagation();
