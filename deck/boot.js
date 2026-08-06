@@ -351,6 +351,17 @@ function setupControls() {
     if (e.target.tagName === 'IFRAME') setTimeout(() => { try { e.target.blur(); } catch {} }, 0);
   });
 
+  // A one-shot blur isn't enough: YouTube re-grabs focus INTERNALLY after playback
+  // starts (no new focusin fires), so keydowns then happen inside the cross-origin
+  // iframe and never reach the deck — T / Esc / ‹ › stop working. While a video is in
+  // cinema, poll and keep focus on the page. Player clicks still register (before the
+  // blur), and disablekb=1 means the player ignores the keyboard anyway.
+  setInterval(() => {
+    if (!document.body.classList.contains('dc-cinema')) return;
+    const a = document.activeElement;
+    if (a && a.tagName === 'IFRAME') { try { a.blur(); } catch {} }
+  }, 300);
+
   // Auto-hide controls + cursor when the mouse sits still (effect gated to the show
   // via CSS body.dc-fs.dc-idle). Any activity brings them back and restarts the timer.
   let idleTimer = null;
