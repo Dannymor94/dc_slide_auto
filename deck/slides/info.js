@@ -74,16 +74,17 @@ export function infoSlide(effective, mode) {
       <span class="footer-icon">${footerIcon}</span>${footerText}
     </div>`;
 
-  // background-music toggle: sits in the left column flow, right UNDER the progress bar.
-  // Only when a URL is set. Plays via a hidden player (boot.js) — the slide content stays
-  // visible (not cinema). tabindex=-1 → never steals arrow keys from Reveal.
+  // background-music toggle: an OVERLAY in the bottom-left corner (position:absolute →
+  // takes no layout row). Only when a URL is set. Plays via a hidden player (boot.js) —
+  // the slide content stays visible (not cinema). tabindex=-1 → never steals arrow keys.
+  // Auto-hides on idle in the fullscreen show (like the other menu controls).
   const musicBtn = effective.bg_music_url ? `
-      <button class="info-music-btn" onclick="window.dcToggleBgMusic&&window.dcToggleBgMusic()"
-              tabindex="-1" title="Фоновая музыка" aria-label="Фоновая музыка">
-        <span class="info-music-ico">▶</span><span class="info-music-lbl">Музыка</span>
-      </button>` : '';
+    <button class="info-music-btn" onclick="window.dcToggleBgMusic&&window.dcToggleBgMusic()"
+            tabindex="-1" title="Фоновая музыка" aria-label="Фоновая музыка">
+      <span class="info-music-ico">▶</span><span class="info-music-lbl">Музыка</span>
+    </button>` : '';
 
-  // Left column: 5-row grid (row 5 = progress, collapses to 0 when absent) + music button
+  // Left column: 5-row grid (row 5 = progress, collapses to 0 when absent)
   const left = `
     <div class="info-left">
       ${greetingPanel}
@@ -91,7 +92,6 @@ export function infoSlide(effective, mode) {
       <div class="info-program-items">${programItems(items)}</div>
       ${footerBar}
       ${progressPanel(effective.raised, effective.plan)}
-      ${musicBtn}
     </div>`;
 
   // Right column: news panel (row 1) + jha zone (row 2)
@@ -120,5 +120,5 @@ export function infoSlide(effective, mode) {
   const featured = featuredBlock(effective.featured_news);
   const right = `<div class="info-right">${newsPanel}${featured}${bottom}</div>`;
 
-  return `<section class="dc-slide slide-info">${left}${right}</section>`;
+  return `<section class="dc-slide slide-info">${left}${right}${musicBtn}</section>`;
 }

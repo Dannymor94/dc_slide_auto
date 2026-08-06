@@ -84,10 +84,10 @@
     /* fixed % so left column is never squeezed by right-side content */
     .slide-info { grid-template-columns: 56% 44%; gap: 1.6rem; position: relative; }
 
-    /* background-music toggle: compact pill in the left column, right under the progress
-       bar. Content stays visible — music plays via a hidden player (boot.js). */
+    /* background-music toggle: OVERLAY pill in the bottom-left corner (no layout row).
+       Auto-hides on idle in the show. Content stays visible — hidden player (boot.js). */
     .info-music-btn {
-      justify-self: start; margin-top: 0.5rem;
+      position: absolute; left: 1.5rem; bottom: 0.9rem; z-index: 4;
       display: inline-flex; align-items: center; gap: 0.4rem;
       background: rgba(201,119,61,0.16); color: var(--accent-light);
       border: 1px solid rgba(201,119,61,0.4); border-radius: 999px;
