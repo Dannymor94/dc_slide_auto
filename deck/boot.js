@@ -281,18 +281,29 @@ function setupBgMusic(url) {
   const embed = youtubeEmbedUrl(url || '');
   if (!embed) return;   // no/invalid url → the info button isn't rendered either
   loadYTApi(() => {
-    // Hidden BEHIND the (opaque) deck: full-viewport, z-index:-1. It stays in the
-    // viewport (so playback is never throttled) but is fully covered by the slide, so
-    // it's invisible even in fullscreen — unlike an off-screen host, which leaked.
+    // Bulletproof-hidden host: a 0×0 box with overflow:hidden CLIPS the real-size iframe
+    // to nothing, AND it sits off-screen — either alone would hide it; together nothing
+    // can peek (the "behind the deck" and off-screen-only versions both leaked in some
+    // corner/fullscreen). A YouTube embed keeps playing when clipped/off-screen, so audio
+    // is unaffected. The iframe is a real 300×170 so the player still initializes.
+    // The player must stay IN the viewport (an off-screen video gets auto-PiP'd by the
+    // OS into a floating window), yet be invisible. So: a full-viewport opaque backdrop
+    // (z-index:-1) covers it everywhere — including letterbox corners the deck misses —
+    // while the deck (z-index:0) sits on top of the backdrop. The player is z-index:-2.
+    const backdrop = document.createElement('div');
+    backdrop.id = 'dc-bg-cover';
+    backdrop.style.cssText = 'position:fixed; inset:0; background:var(--slide-bg,#14161f); z-index:-1; pointer-events:none;';
+    document.body.appendChild(backdrop);
+
     const host = document.createElement('div');
     host.id = 'dc-bg-music';
-    host.style.cssText = 'position:fixed; left:0; bottom:0; width:240px; height:135px; z-index:-1; pointer-events:none; overflow:hidden;';
+    host.style.cssText = 'position:fixed; left:0; bottom:0; width:300px; height:170px; z-index:-2; pointer-events:none; overflow:hidden;';
     const iframe = document.createElement('iframe');
     iframe.src = embed;
     iframe.tabIndex = -1;
     iframe.title = 'Фоновая музыка';
     iframe.setAttribute('allow', 'autoplay; encrypted-media');
-    iframe.style.cssText = 'width:100%; height:100%; border:0;';
+    iframe.style.cssText = 'width:300px; height:170px; border:0;';
     host.appendChild(iframe);
     document.body.appendChild(host);
     try {
