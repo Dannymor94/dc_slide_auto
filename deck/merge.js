@@ -60,6 +60,11 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
 
   const date = manifest.date ?? null;
 
+  // optional Уроки-медитации slide: manifest bakes the object only on Sunday-КМ
+  // weeks (absent → no slide). Operator toggle hides it: overrides.hide_urokimeditacii.
+  const urokimeditacii = manifest.urokimeditacii ?? null;
+  const hide_urokimeditacii = !!ov.hide_urokimeditacii;
+
   // jha character: derived from raised/plan ratio
   const jha_pct = (raised && plan && plan > 0) ? raised / plan : 0;
   const jha_image = jha_pct >= JHA_THRESHOLD ? 'assets/jha_rich.png' : 'assets/jha_poor.png';
@@ -83,5 +88,7 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
     date,
     jha_image,
     jha_bubble_text,
+    urokimeditacii,
+    hide_urokimeditacii,
   };
 }

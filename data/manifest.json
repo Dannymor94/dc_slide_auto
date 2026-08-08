@@ -1,5 +1,5 @@
 {
-  "date": "2026-08-02",
+  "date": "2026-08-09",
   "program": [
     {
       "time": "08:30",
@@ -16,7 +16,7 @@
       "_llm_uncertain": false
     },
     {
-      "time": "10:30",
+      "time": "10:35",
       "title": "Свободное время, личные уроки",
       "note": null,
       "is_practice_end": false,
@@ -24,8 +24,8 @@
     },
     {
       "time": "11:00",
-      "title": "Сатсанг",
-      "note": "Немного поговорим о том, как у кого дела и как прошла неделя. Без долгих лекций — просто чтобы получше узнать друг друга",
+      "title": "КМ с Дадой 20/20",
+      "note": null,
       "is_practice_end": false,
       "_llm_uncertain": false
     },
@@ -54,6 +54,93 @@
   "final_music_url": null,
   "raised": 18700,
   "plan": 30000,
-  "video_url": "https://youtu.be/5AwaTftbebo",
-  "suggested_songs": []
+  "video_url": "https://youtu.be/rclMEfe2cVs",
+  "suggested_songs": [],
+  "urokimeditacii": {
+    "month_label": "август 2026",
+    "month": 8,
+    "year": 2026,
+    "greeting": "Приветствуем вас в нашем Пространстве",
+    "schedule_note": "В расписании возможны изменения — следите за анонсами",
+    "wisdom": "Жизнь начинается с каждого нового вдоха внутри тебя",
+    "channel": "t.me/urokimeditacii_rnd",
+    "highlight_day": 9,
+    "meeting": {
+      "date_label": "вс 9 августа",
+      "items": [
+        {
+          "time": "10:45",
+          "name": "Сбор гостей, знакомство",
+          "km": false
+        },
+        {
+          "time": "11:00",
+          "name": "Коллективная медитация",
+          "km": true
+        },
+        {
+          "time": "12:00",
+          "name": "Тёплое общение, вкусный чай",
+          "km": false
+        }
+      ]
+    },
+    "calendar": [
+      {
+        "day": 1,
+        "kind": "km",
+        "label": "КМ · Киноклуб"
+      },
+      {
+        "day": 4,
+        "kind": "asana",
+        "label": "Асана-класс"
+      },
+      {
+        "day": 6,
+        "kind": "asana",
+        "label": "Асана-класс"
+      },
+      {
+        "day": 9,
+        "kind": "km",
+        "label": "КМ с Дадой Нитьябодхой"
+      },
+      {
+        "day": 11,
+        "kind": "asana",
+        "label": "Асана-класс"
+      },
+      {
+        "day": 13,
+        "kind": "asana",
+        "label": "Асана-класс"
+      },
+      {
+        "day": 15,
+        "kind": "km",
+        "label": "КМ · Книжный"
+      },
+      {
+        "day": 18,
+        "kind": "asana",
+        "label": "Асана-класс"
+      },
+      {
+        "day": 20,
+        "kind": "asana",
+        "label": "Асана-класс"
+      },
+      {
+        "day": 22,
+        "kind": "km",
+        "label": "КМ · Чтение пьесы"
+      },
+      {
+        "day": 30,
+        "kind": "km",
+        "label": "КМ"
+      }
+    ]
+  }
 }

@@ -219,6 +219,124 @@ def fetch_posts(days: int | None = None, finance_days: int | None = None) -> dic
         return {"connected": False, "program": None, "finance": None, "songs": []}
 
 
+# ── Уроки медитации: weekly meeting schedule post ────────────────────────────────
+# The КМ meeting schedule lives in a SEPARATE post of the Уроки-медитации channel
+# (t.me/urokimeditacii_rnd) — the day-of invitation ("План мероприятий" /
+# "Расписание мероприятия"), NOT the multi-day "Афиша недели" (that is already the
+# Airtable calendar) and NOT the ДЧ program post the main deck parses. We pick the
+# post COVERING the КМ date (same ISO week) and parse its schedule lines.
+#
+# Two real line shapes on the channel:
+#   "✅ Коллективная медитация — 11:00"      (name — time)
+#   "🧘11:00 — Коллективная медитация"        (time — name, richer posts)
+# Intro prose also contains a time ("…в 11:00 в студии…") → excluded: a schedule
+# line either starts with a bullet/emoji or has its time at the very edge.
+from zoneinfo import ZoneInfo as _ZoneInfo
+
+_MSK_TG = _ZoneInfo("Europe/Moscow")
+_WD_ABBR = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
+_RU_MON_GEN = {1: "января", 2: "февраля", 3: "марта", 4: "апреля", 5: "мая", 6: "июня",
+               7: "июля", 8: "августа", 9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"}
+_KM_MARKER_TG = "коллективная медитац"
+_CYR = "А-Яа-яЁё"
+
+
+def _is_schedule_line(line: str, tstart: int, tend: int) -> bool:
+    """A real schedule row (not intro prose): starts with a bullet/emoji, or the
+    time sits at the very start/end of the line."""
+    head = line.lstrip()[:1]
+    starts_bullet = bool(head) and not re.match(f"[{_CYR}]", head)
+    return starts_bullet or tstart <= 3 or (len(line) - tend) <= 3
+
+
+def _clean_meeting_name(line: str, tstart: int, tend: int) -> str:
+    """Strip the time + leading bullets/emoji + trailing dashes/punct → event name."""
+    name = line[:tstart] + line[tend:]
+    name = re.sub(f"^[^{_CYR}«(]+", "", name)          # drop leading emoji/✅/dash/digits
+    name = re.sub(f"[^{_CYR}»).!]+$", "", name)        # drop trailing dash/emoji/punct/space
+    name = re.sub(r"\s{2,}", " ", name).strip()
+    return name
+
+
+def parse_um_meeting(text: str) -> list[dict]:
+    """Schedule items from a Уроки-медитации meeting post. Deterministic, no LLM.
+    Returns [{time, name, km}] in CHRONOLOGICAL order (a schedule reads by the
+    clock). The km flag drives styling only, not position. [] if none."""
+    items: list[dict] = []
+    for line in (text or "").splitlines():
+        m = _TIME_RE.search(line)
+        if not m:
+            continue
+        if not _is_schedule_line(line, m.start(), m.end()):
+            continue
+        name = _clean_meeting_name(line, m.start(), m.end())
+        if len(name) < 2 or not re.search(f"[{_CYR}]", name):
+            continue
+        hh, mm = m.group(0).split(":")
+        time = f"{int(hh):02d}:{mm}"
+        km = _KM_MARKER_TG in name.lower()
+        items.append({"time": time, "name": name, "km": km})
+    # Strict chronological order — HH:MM is zero-padded, so a lexical sort == time
+    # sort. (The "КМ first" rule applies only to calendar cells, which have no times.)
+    items.sort(key=lambda i: i["time"])
+    return items
+
+
+def fetch_um_meeting(km_date, channel: str) -> dict | None:
+    """Meeting card for the КМ day from the Уроки channel, or None (no card drawn).
+
+    Picks the post in km_date's ISO week that is NOT the weekly «Афиша недели»,
+    carries a parseable schedule, and contains the КМ line. Never raises: missing
+    creds / telethon / channel error / no matching post / no times → None.
+    `channel` may be 't.me/name', '@name' or 'name'.
+    """
+    if km_date is None:
+        return None
+    uname = channel.strip().rsplit("/", 1)[-1].lstrip("@")
+    if not (_creds_ok() and uname):
+        print("[warn] fetch_um_meeting: нет creds/канала — расписание встречи пропущено.",
+              file=sys.stderr)
+        return None
+    try:
+        import telethon  # noqa: F401
+    except ImportError:
+        print("[warn] fetch_um_meeting: telethon не установлен — расписание пропущено.", file=sys.stderr)
+        return None
+
+    monday = km_date - timedelta(days=km_date.weekday())   # Monday of the КМ week
+    week_end = monday + timedelta(days=7)
+    try:
+        with make_client() as client:
+            scanned = 0
+            for msg in client.iter_messages(uname):
+                scanned += 1
+                if scanned > 200:
+                    break
+                if not msg.date:
+                    continue
+                d = msg.date.astimezone(_MSK_TG).date()
+                if d >= week_end:
+                    continue          # newer than the КМ week → keep scanning back
+                if d < monday:
+                    break             # older than the КМ week → done
+                text = (msg.message or "").strip()
+                if not text or "афиша недели" in text.lower():
+                    continue          # skip the multi-day weekly poster
+                items = parse_um_meeting(text)
+                if not items or not any(i["km"] for i in items):
+                    continue          # a meeting post must carry the КМ line
+                label = f"{_WD_ABBR[km_date.weekday()]} {km_date.day} {_RU_MON_GEN[km_date.month]}"
+                print(f"[info] fetch_um_meeting: пост id={msg.id} ({d}), пунктов={len(items)}",
+                      file=sys.stderr)
+                return {"date_label": label, "items": items}
+        print("[info] fetch_um_meeting: пост встречи на неделю КМ не найден — карточки нет.",
+              file=sys.stderr)
+        return None
+    except Exception as e:
+        print(f"[warn] fetch_um_meeting: ошибка Telethon ({e}) — расписание пропущено.", file=sys.stderr)
+        return None
+
+
 # ── СВАДХЬЯЯ: newest Dada YouTube link ───────────────────────────────────────────
 def youtube_url(text: str) -> str | None:
     """Clean https://youtu.be/<id> for the first youtu.be / youtube.com/watch link

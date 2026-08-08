@@ -35,6 +35,7 @@ scratchpad/
 
 # ── Local preview harness (mock-data deck; dev only, never deployed) ──
 deck/preview*.html
+deck/manifest.json
 
 # ── Song images: heavy PNG sources (from the PDF) stay local; only the light
 #    webp deliverables are tracked (deck ships them; deploy carries them). ──
@@ -42,6 +43,9 @@ deck/assets/songs/*.png
 
 # ── Build runtime state (Mac-side): song numbers already alerted (idempotency) ──
 build/alerted_songs.json
+
+# ── Build runtime state (Mac-side): recently used wisdom lines (dedup history) ──
+build/wisdom_history.json
 
 # ── Build run status (regenerated every build, delivered to the VPS) ──
 data/last_build_status.json

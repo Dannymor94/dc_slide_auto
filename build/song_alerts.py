@@ -107,12 +107,40 @@ def _line(label: str, st) -> str:
     return f"{_EMOJI.get(st.get('ok'))} {label}: {val}"
 
 
+def _plural_punkt(n: int) -> str:
+    m, h = n % 10, n % 100
+    if 11 <= h <= 14:
+        return "пунктов"
+    if m == 1:
+        return "пункт"
+    if 2 <= m <= 4:
+        return "пункта"
+    return "пунктов"
+
+
+def _um_line(st) -> str:
+    """Уроки-медитации slide status. «Слайда нет» = ➖ (норма на большинстве недель),
+    НЕ ❌ — иначе оператор паникует каждую субботнюю неделю. Данные — из результата
+    модуля (highlight_day + длина meeting.items), без пересчёта."""
+    st = st or {}
+    s = st.get("state")
+    if s == "ok":
+        n = st.get("items") or 0
+        return f"✅ Уроки медитации: слайд есть (вс {st.get('day')}) · расписание {n} {_plural_punkt(n)}"
+    if s == "warn":
+        return f"⚠️ Уроки медитации: слайд есть (вс {st.get('day')}) · расписание не найдено"
+    if s == "error":
+        return "❌ Уроки медитации: ошибка — слайд не собран"
+    return "➖ Уроки медитации: воскресной КМ нет — слайд не нужен"
+
+
 def build_summary_text(status: dict) -> str:
     lines = [f"🔨 Прожиг dc-deck · {status.get('ts') or '—'}",
              _line("Программа", status.get("program")),
              _line("Деньги", status.get("money")),
              _line("Видео", status.get("video")),
-             _line("Новости", status.get("news"))]
+             _line("Новости", status.get("news")),
+             _um_line(status.get("urokimeditacii"))]
     songs = status.get("songs") or {}
     sug, miss = songs.get("suggested") or [], songs.get("missing") or []
     if sug:

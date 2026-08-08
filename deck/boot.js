@@ -4,6 +4,7 @@ import { songSlide } from './slides/song.js';
 import { videoSlide, youtubeEmbedUrl } from './slides/video.js';
 import { dadaSlide } from './slides/dada.js';
 import { musicSlide } from './slides/music.js';
+import { urokimeditaciiSlide } from './slides/urokimeditacii.js';
 
 async function safeFetch(url) {
   try {
@@ -89,6 +90,12 @@ async function buildSlides() {
   // final video slide — last in the deck, only when final_video_url is set
   if (youtubeEmbedUrl(effective.final_video_url || '')) {
     sections.push(videoSlide({ ...effective, video_url: effective.final_video_url }));
+  }
+
+  // Уроки-медитации slide — appended LAST, only when the manifest baked it
+  // (Sunday-КМ week) AND the operator hasn't hidden it via the toggle.
+  if (effective.urokimeditacii && !effective.hide_urokimeditacii) {
+    sections.push(urokimeditaciiSlide(effective.urokimeditacii, effective.bg_music_url));
   }
 
   const container = document.getElementById('dc-slides');
@@ -225,12 +232,24 @@ function refreshSongCinema() {
 
 // On every slide change: drop any prior cinema (pauses video, restores layout),
 // then re-enter song cinema only if we're in the show.
+// RE-ENTRANCY GUARD: exitCinema()/enterCinema() call Reveal.layout(), and in Reveal's
+// SCROLL view layout() re-dispatches 'slidechanged' → this very handler → exitCinema →
+// layout → … → infinite recursion (RangeError: Maximum call stack size exceeded). The
+// flag makes the re-entrant call a no-op, breaking the loop; the layout still completes.
+let _cinemaSyncing = false;
 function onCinemaSlideChanged() {
-  exitCinema();
-  refreshSongCinema();
-  // background music lives only on the info slides → pause it anywhere else
-  const cur = (typeof Reveal !== 'undefined' && Reveal.getCurrentSlide?.()) || null;
-  if (!cur || !cur.classList.contains('slide-info')) pauseBg();
+  if (_cinemaSyncing) return;
+  _cinemaSyncing = true;
+  try {
+    exitCinema();
+    refreshSongCinema();
+    // background music lives on the info slides AND the Уроки-медитации slide → pause elsewhere
+    const cur = (typeof Reveal !== 'undefined' && Reveal.getCurrentSlide?.()) || null;
+    const bgOk = cur && (cur.classList.contains('slide-info') || cur.classList.contains('um-slide'));
+    if (!bgOk) pauseBg();
+  } finally {
+    _cinemaSyncing = false;
+  }
 }
 
 function enterCinema(el) {
@@ -275,21 +294,32 @@ function loadYTApi(cb) {
 // slides. Plays UNDER the visible slide (not cinema). The host is off-screen and the
 // iframe is tabindex=-1 + pointer-events:none → it can never grab arrow keys. Always
 // mutually exclusive with the video/final players (never two sounds at once). ──
-let bgPlayer = null;
+let bgPlayer = null, bgReady = false;
 
+// Parse a bg-music URL → { id, list }. Drops auto-radio (RD…) and Liked/WatchLater
+// lists (YouTube won't play those in an embed); keeps real playlists (PL/UU/OL).
+function parseBgSource(url) {
+  try {
+    const u = new URL(url);
+    let id = u.searchParams.get('v');
+    if (!id && u.hostname === 'youtu.be') id = u.pathname.slice(1);
+    const raw = u.searchParams.get('list');
+    const list = raw && /^(PL|UU|OL)/.test(raw) ? raw : null;
+    if (!id && !list) return null;
+    return { id: id || null, list };
+  } catch { return null; }
+}
+
+// Let YT.Player BUILD its own iframe from a mount <div> (canonical usage). This wires
+// enablejsapi + the parent↔iframe postMessage handshake correctly — attaching a Player
+// to a pre-made <iframe src=…> is fragile (silent no-op playVideo, the origin-mismatch
+// flood). origin/loop go through playerVars.
 function setupBgMusic(url) {
-  const embed = youtubeEmbedUrl(url || '');
-  if (!embed) return;   // no/invalid url → the info button isn't rendered either
+  const src = parseBgSource(url || '');
+  if (!src) return;   // no/invalid url → the info button isn't rendered either
   loadYTApi(() => {
-    // Bulletproof-hidden host: a 0×0 box with overflow:hidden CLIPS the real-size iframe
-    // to nothing, AND it sits off-screen — either alone would hide it; together nothing
-    // can peek (the "behind the deck" and off-screen-only versions both leaked in some
-    // corner/fullscreen). A YouTube embed keeps playing when clipped/off-screen, so audio
-    // is unaffected. The iframe is a real 300×170 so the player still initializes.
-    // The player must stay IN the viewport (an off-screen video gets auto-PiP'd by the
-    // OS into a floating window), yet be invisible. So: a full-viewport opaque backdrop
-    // (z-index:-1) covers it everywhere — including letterbox corners the deck misses —
-    // while the deck (z-index:0) sits on top of the backdrop. The player is z-index:-2.
+    // Hidden but IN-viewport: opaque full-screen backdrop (z-index:-1) covers the player
+    // (z-index:-2) incl. letterbox corners; deck at z-0. In-viewport avoids OS auto-PiP.
     const backdrop = document.createElement('div');
     backdrop.id = 'dc-bg-cover';
     backdrop.style.cssText = 'position:fixed; inset:0; background:var(--slide-bg,#14161f); z-index:-1; pointer-events:none;';
@@ -298,17 +328,24 @@ function setupBgMusic(url) {
     const host = document.createElement('div');
     host.id = 'dc-bg-music';
     host.style.cssText = 'position:fixed; left:0; bottom:0; width:300px; height:170px; z-index:-2; pointer-events:none; overflow:hidden;';
-    const iframe = document.createElement('iframe');
-    iframe.src = embed;
-    iframe.tabIndex = -1;
-    iframe.title = 'Фоновая музыка';
-    iframe.setAttribute('allow', 'autoplay; encrypted-media');
-    iframe.style.cssText = 'width:300px; height:170px; border:0;';
-    host.appendChild(iframe);
+    const mount = document.createElement('div');   // YT.Player REPLACES this with its iframe
+    host.appendChild(mount);
     document.body.appendChild(host);
+
+    const playerVars = {
+      autoplay: 0, controls: 0, disablekb: 1, playsinline: 1, rel: 0,
+      origin: location.origin,
+    };
+    if (src.list) playerVars.list = src.list;
+    else { playerVars.loop = 1; playerVars.playlist = src.id; }   // loop the single track
+
     try {
-      bgPlayer = new YT.Player(iframe, {
+      bgPlayer = new YT.Player(mount, {
+        width: '300', height: '170',
+        videoId: src.id || undefined,
+        playerVars,
         events: {
+          onReady: () => { bgReady = true; },
           onStateChange: e => syncBgButtons(e.data === 1),   // 1 = PLAYING
           onError: () => setBgUnavailable(),
         },
@@ -334,14 +371,19 @@ function pauseBg() { try { if (bgPlayer && bgPlayer.pauseVideo) bgPlayer.pauseVi
 
 // Toggle from the info-slide button (global — the button uses inline onclick).
 window.dcToggleBgMusic = () => {
-  if (!bgPlayer) return;   // API not up → no-op, the slide never breaks
+  if (!bgPlayer || !bgReady) return;   // API not up / player not ready yet → no-op
   try {
     if (bgPlayer.getPlayerState && bgPlayer.getPlayerState() === 1) {
       bgPlayer.pauseVideo();
     } else {
       // mutual exclusion: silence any video/final player before starting the music
       ytPlayers.forEach(p => { try { if (p.pauseVideo) p.pauseVideo(); } catch {} });
+      // Autoplay-with-sound can be blocked on unfamiliar hosts (the player buffers then
+      // reverts to paused). Muted play is always allowed, and un-muting is permitted
+      // inside this click gesture — so mute → play → unMute, all within the gesture.
+      try { bgPlayer.mute(); } catch {}
       bgPlayer.playVideo();
+      try { bgPlayer.unMute(); bgPlayer.setVolume(100); } catch {}
     }
   } catch {}
 };

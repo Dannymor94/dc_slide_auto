@@ -61,6 +61,62 @@
       "items": {
         "type": "integer"
       }
+    },
+    "urokimeditacii": {
+      "type": "object",
+      "description": "Optional Уроки-медитации slide, baked only on Sunday-КМ weeks (absent → no slide). Appended LAST in the deck. See build/urokimeditacii.py and DECK-CONTRACT.md.",
+      "required": ["month_label", "month", "year", "channel", "highlight_day", "calendar"],
+      "additionalProperties": false,
+      "properties": {
+        "month_label": { "type": "string", "description": "Nominative RU month + year, e.g. 'август 2026'." },
+        "month": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "year": { "type": "integer" },
+        "greeting": { "type": "string", "description": "Left-column subtitle under «Намаскар». Project constant from build/urokimeditacii.json." },
+        "schedule_note": { "type": "string", "description": "Note under the calendar. Project constant from build/urokimeditacii.json." },
+        "wisdom": {
+          "type": ["string", "null"],
+          "description": "Closing line — the feature's single bounded LLM point (Mac only), validated + deduped + baked. null if generation is deferred/absent."
+        },
+        "channel": { "type": "string", "description": "Project constant from build/urokimeditacii.json." },
+        "highlight_day": { "type": "integer", "description": "Day-of-month of the Sunday КМ. Kept in data; the v11 renderer does NOT accent it." },
+        "meeting": {
+          "type": ["object", "null"],
+          "description": "Meeting schedule parsed from the Уроки channel post covering the КМ day (build/fetch_telegram.py:fetch_um_meeting). null → schedule card omitted, slide intact.",
+          "required": ["date_label", "items"],
+          "additionalProperties": false,
+          "properties": {
+            "date_label": { "type": "string", "description": "e.g. 'вс 30 августа' (from the КМ date)." },
+            "items": {
+              "type": "array",
+              "description": "Schedule rows, КМ first then post order.",
+              "items": {
+                "type": "object",
+                "required": ["time", "name"],
+                "additionalProperties": false,
+                "properties": {
+                  "time": { "type": "string", "pattern": "^\\d{2}:\\d{2}$" },
+                  "name": { "type": "string" },
+                  "km": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "calendar": {
+          "type": "array",
+          "description": "One cell per current-month day that has a Тип==УМ event. Days without events are drawn by the renderer from month/year.",
+          "items": {
+            "type": "object",
+            "required": ["day", "kind", "label"],
+            "additionalProperties": false,
+            "properties": {
+              "day": { "type": "integer", "minimum": 1, "maximum": 31 },
+              "kind": { "type": "string", "enum": ["km", "asana", "fk", "charity", "other"] },
+              "label": { "type": "string" }
+            }
+          }
+        }
+      }
     }
   }
 }

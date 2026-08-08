@@ -23,6 +23,7 @@ from extract_progress import extract_progress
 from fetch_news import fetch_news
 from fetch_telegram import fetch_dada_video, fetch_posts
 from song_alerts import find_new_songs, report_build
+from urokimeditacii import build_urokimeditacii
 
 ROOT = Path(__file__).parent.parent
 MANIFEST_PATH = ROOT / "data" / "manifest.json"
@@ -54,7 +55,7 @@ def _rsync(local: Path, remote: str) -> None:
 def main() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text())
     status = {"program": None, "money": None, "video": None, "news": None,
-              "songs": None, "deploy": None, "ts": None}
+              "urokimeditacii": None, "songs": None, "deploy": None, "ts": None}
 
     # ── News (Airtable) ──
     try:
@@ -89,8 +90,12 @@ def main() -> None:
                 status["program"] = _fail(e)
                 print(f"[warn] extract_program: {e}", file=sys.stderr)
         else:
-            manifest["program"] = []
-            status["program"] = _fail("пост программы не найден")
+            # Program post aged out of the window / not posted yet → KEEP the previous
+            # manifest program. A transient window miss must NEVER wipe live data (same
+            # policy as the Telethon-disconnected branch above).
+            status["program"] = _fail("пост программы не найден — прежняя программа сохранена")
+            print("[warn] program: пост ДЧ не найден в окне — прежняя программа сохранена (не затираю).",
+                  file=sys.stderr)
 
         # money
         if posts["finance"]:
@@ -124,6 +129,28 @@ def main() -> None:
     except Exception as e:
         status["video"] = _fail(e)
         print(f"[warn] video: {e}", file=sys.stderr)
+
+    # ── Уроки медитации (optional, appended only on Sunday-КМ weeks) ──
+    # Absent key = no slide. On trigger-false or any error we DROP the key so a
+    # stale slide from a previous week never lingers. M1: baked but not rendered.
+    try:
+        um = build_urokimeditacii(manifest.get("date"))
+        if um:
+            manifest["urokimeditacii"] = um
+            # status from the SAME result (no recompute): день + длина расписания
+            items = len((um.get("meeting") or {}).get("items") or [])
+            status["urokimeditacii"] = {
+                "state": "ok" if items else "warn",   # ✅ есть расписание / ⚠️ пост не спарсился
+                "day": um.get("highlight_day"),
+                "items": items,
+            }
+        else:
+            manifest.pop("urokimeditacii", None)
+            status["urokimeditacii"] = {"state": "skip"}   # ➖ нет воскресной КМ (норма)
+    except Exception as e:
+        manifest.pop("urokimeditacii", None)
+        status["urokimeditacii"] = {"state": "error", "error": str(e)[:180]}   # ❌
+        print(f"[warn] urokimeditacii: {e}", file=sys.stderr)
 
     # ── write manifest ──
     manifest.setdefault("suggested_songs", [])

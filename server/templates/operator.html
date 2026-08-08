@@ -486,6 +486,16 @@
     <div class="bar-wrap"><div class="bar-fill" id="live-bar" style="width:0%"></div></div>
     <div class="bar-lbl" id="live-bar-lbl">введите план, чтобы увидеть прогресс</div>
     <div class="field-hint" id="money-auto-hint"></div>
+
+    <!-- Уроки медитации: тумблер видимости авто-слайда. Показывается только когда
+         manifest испёк слайд (неделя с воскресной КМ). overrides.hide_urokimeditacii -->
+    <div id="um-toggle-row" style="display:none; margin-top:1.1rem; padding-top:1rem; border-top:1px solid rgba(255,255,255,0.06)">
+      <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-size:0.9rem">
+        <input type="checkbox" id="hide-urokimeditacii" style="width:auto; accent-color:var(--accent)">
+        Скрыть слайд «Уроки медитации»
+      </label>
+      <div class="field-hint">Слайд добавляется в конец автоматически на неделях с воскресной КМ. Галочка — не показывать его в этом деке.</div>
+    </div>
   </div>
 </div>
 
@@ -584,6 +594,13 @@ function loadForm() {
 
   // Дада
   document.getElementById('ov-dada').value = ov.dada_comment ?? '';
+
+  // Уроки медитации: чекбокс всегда отражает сохранённое значение (чтобы save не
+  // затирал hide=true, когда слайд временно отсутствует), а строка видна только
+  // когда manifest реально испёк слайд.
+  document.getElementById('hide-urokimeditacii').checked = !!ov.hide_urokimeditacii;
+  document.getElementById('um-toggle-row').style.display =
+    manifest?.urokimeditacii ? '' : 'none';
 
   // Программа
   if (ov.program) {
@@ -1162,6 +1179,7 @@ document.getElementById('video-url').addEventListener('input', () => { renderAut
 document.getElementById('final-video-url').addEventListener('input', scheduleSave);
 document.getElementById('bg-music-url').addEventListener('input', scheduleSave);
 document.getElementById('ov-dada').addEventListener('input',   scheduleSave);
+document.getElementById('hide-urokimeditacii').addEventListener('change', scheduleSave);
 
 // ── Save ───────────────────────────────────────────────────────────────────────
 function scheduleSave() {
@@ -1200,6 +1218,7 @@ async function doSave() {
       featured_news: featuredArr.length ? featuredArr : null,
       practice_end:  practiceEnd || null,
       dada_comment:  document.getElementById('ov-dada').value.trim() || null,
+      hide_urokimeditacii: document.getElementById('hide-urokimeditacii').checked,
     },
   };
 
