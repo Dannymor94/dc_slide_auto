@@ -1188,6 +1188,16 @@ function scheduleSave() {
   saveTimer = setTimeout(doSave, SAVE_DELAY);
 }
 
+// Amount from a money field. Empty → null (fall through to the manifest/Telegram
+// auto value). Any number INCLUDING 0 → that number (overrides the auto). The old
+// `parseInt(v) || null` turned an explicit 0 into null, so «0» never overrode.
+function amountVal(id) {
+  const v = document.getElementById(id).value.trim();
+  if (v === '') return null;
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? null : n;
+}
+
 async function doSave() {
   const songNums = [...document.querySelectorAll('#song-cards .song-card')]
     .map(c => parseInt(c.dataset.number, 10)).filter(n => !isNaN(n));
@@ -1209,8 +1219,8 @@ async function doSave() {
     video_url:       document.getElementById('video-url').value.trim(),
     final_video_url: document.getElementById('final-video-url').value.trim(),
     bg_music_url:    document.getElementById('bg-music-url').value.trim(),
-    raised:       parseInt(document.getElementById('raised').value, 10) || null,
-    plan:         parseInt(document.getElementById('plan').value,   10) || null,
+    raised:       amountVal('raised'),
+    plan:         amountVal('plan'),
     overrides: {
       program:       progOv,
       news:          newsOv,
