@@ -290,11 +290,13 @@ function loadYTApi(cb) {
   document.head.appendChild(s);
 }
 
-// ── Background music: a hidden YouTube player toggled by the ▶/⏸ button on the info
-// slides. Plays UNDER the visible slide (not cinema). The host is off-screen and the
-// iframe is tabindex=-1 + pointer-events:none → it can never grab arrow keys. Always
-// mutually exclusive with the video/final players (never two sounds at once). ──
-let bgPlayer = null, bgWatch = null;
+// ── Background music: a SMALL real YouTube player (native controls) revealed by the ▶
+// button on the info slides. Music is STARTED by a native click on YouTube's own play
+// button — YouTube blocks PROGRAMMATIC start for many label tracks, but a native click
+// works for ANY track. Once playing, the player is tucked invisible (opacity:0, kept
+// in-viewport so audio continues) and the button becomes ⏸. Always mutually exclusive
+// with the video/final players (never two sounds at once). ──
+let bgPlayer = null;
 
 // Parse a bg-music URL → { id, list }. Drops auto-radio (RD…) and Liked/WatchLater
 // lists (YouTube won't play those in an embed); keeps real playlists (PL/UU/OL).
@@ -310,48 +312,47 @@ function parseBgSource(url) {
   } catch { return null; }
 }
 
-// Let YT.Player BUILD its own iframe from a mount <div> (canonical usage). This wires
-// enablejsapi + the parent↔iframe postMessage handshake correctly — attaching a Player
-// to a pre-made <iframe src=…> is fragile (silent no-op playVideo, the origin-mismatch
-// flood). origin/loop go through playerVars.
 function setupBgMusic(url) {
   const src = parseBgSource(url || '');
   if (!src) return;   // no/invalid url → the info button isn't rendered either
   loadYTApi(() => {
-    // Hidden but IN-viewport: opaque full-screen backdrop (z-index:-1) covers the player
-    // (z-index:-2) incl. letterbox corners; deck at z-0. In-viewport avoids OS auto-PiP.
-    const backdrop = document.createElement('div');
-    backdrop.id = 'dc-bg-cover';
-    backdrop.style.cssText = 'position:fixed; inset:0; background:var(--slide-bg,#14161f); z-index:-1; pointer-events:none;';
-    document.body.appendChild(backdrop);
-
+    // Small real player, bottom-left, above the ▶ button. Invisible until opened (opacity:0);
+    // opacity — NOT display:none — so once started the audio keeps playing while tucked away,
+    // and staying in-viewport means no letterbox peek and no OS auto-PiP.
     const host = document.createElement('div');
     host.id = 'dc-bg-music';
-    host.style.cssText = 'position:fixed; left:0; bottom:0; width:300px; height:170px; z-index:-2; pointer-events:none; overflow:hidden;';
+    host.style.cssText = 'position:fixed; left:1.5rem; bottom:8.5rem; width:264px; z-index:9999;'
+      + ' opacity:0; pointer-events:none; transition:opacity .15s; border-radius:10px;'
+      + ' overflow:hidden; background:#000; box-shadow:0 12px 32px rgba(0,0,0,.55);';
+    const hint = document.createElement('div');
+    hint.style.cssText = 'font:600 11px/1.35 var(--font-body,sans-serif); color:#fff;'
+      + ' background:rgba(20,22,31,.96); padding:6px 10px; text-align:center;';
+    hint.textContent = 'Нажмите ▶ в плеере, чтобы включить музыку';
     const mount = document.createElement('div');   // YT.Player REPLACES this with its iframe
-    host.appendChild(mount);
+    host.appendChild(hint); host.appendChild(mount);
     document.body.appendChild(host);
 
-    const playerVars = {
-      autoplay: 0, controls: 0, disablekb: 1, playsinline: 1, rel: 0,
-      origin: location.origin,
-    };
-    if (src.list) playerVars.list = src.list;
-    else { playerVars.loop = 1; playerVars.playlist = src.id; }   // loop the single track
+    const playerVars = { controls: 1, playsinline: 1, rel: 0, origin: location.origin };
+    if (src.list) playerVars.list = src.list;   // a playlist loops on its own
 
     try {
       bgPlayer = new YT.Player(mount, {
-        width: '300', height: '170',
+        width: '264', height: '149',
         videoId: src.id || undefined,
         playerVars,
         events: {
-          onStateChange: e => { if (e.data === 1) clearTimeout(bgWatch); syncBgButtons(e.data === 1); },  // PLAYING → cancel block-watch
+          onStateChange: e => { if (e.data === 1) hideBgPlayer(); syncBgButtons(e.data === 1); },  // PLAYING → tuck away, audio continues
           onError: () => setBgUnavailable(),
         },
       });
     } catch { setBgUnavailable(); }
   });
 }
+
+// Reveal / tuck-away the mini-player. Tuck = opacity:0 (NOT display:none, which would
+// suspend playback); the player stays in-viewport so the browser keeps the audio going.
+function showBgPlayer() { const h = document.getElementById('dc-bg-music'); if (h) { h.style.opacity = '1'; h.style.pointerEvents = 'auto'; } }
+function hideBgPlayer() { const h = document.getElementById('dc-bg-music'); if (h) { h.style.opacity = '0'; h.style.pointerEvents = 'none'; } }
 
 function syncBgButtons(playing) {
   document.querySelectorAll('.info-music-btn').forEach(b => {
@@ -366,41 +367,22 @@ function setBgUnavailable() {
   document.querySelectorAll('.info-music-btn').forEach(b => b.classList.add('unavailable'));
 }
 
-// A track that cued but never actually PLAYS via the API (label-restricted: it buffers
-// then reverts) → fade the button and say so, instead of the operator guessing blindly.
-function markBgBlocked() {
-  document.querySelectorAll('.info-music-btn').forEach(b => {
-    b.classList.add('unavailable');
-    const lbl = b.querySelector('.info-music-lbl');
-    if (lbl) lbl.textContent = 'трек недоступен';
-  });
-}
-
-function pauseBg() { try { if (bgPlayer && bgPlayer.pauseVideo) bgPlayer.pauseVideo(); } catch {} }
+function pauseBg() { try { if (bgPlayer && bgPlayer.pauseVideo) bgPlayer.pauseVideo(); } catch {} hideBgPlayer(); }
 
 // Toggle from the info-slide button (global — the button uses inline onclick).
+// Playing → pause (API pause is allowed; only programmatic START is blocked) + tuck away.
+// Not playing → reveal the mini-player so the presenter clicks YouTube's ▶ (native start).
 window.dcToggleBgMusic = () => {
-  // Guard on the METHOD existing (it appears once the player is ready) rather than an
-  // onReady flag — the onReady event can be flaky, and gating on it left the button dead.
-  if (!bgPlayer || typeof bgPlayer.playVideo !== 'function') return;
+  if (!bgPlayer) return;
   try {
-    if (bgPlayer.getPlayerState && bgPlayer.getPlayerState() === 1) {
+    const playing = bgPlayer.getPlayerState && bgPlayer.getPlayerState() === 1;
+    if (playing) {
       bgPlayer.pauseVideo();
+      hideBgPlayer();
     } else {
-      // mutual exclusion: silence any video/final player before starting the music
+      // mutual exclusion: silence any video/final player before showing the music player
       ytPlayers.forEach(p => { try { if (p.pauseVideo) p.pauseVideo(); } catch {} });
-      // Autoplay-with-sound can be blocked on unfamiliar hosts (the player buffers then
-      // reverts to paused). Muted play is always allowed, and un-muting is permitted
-      // inside this click gesture — so mute → play → unMute, all within the gesture.
-      try { bgPlayer.mute(); } catch {}
-      bgPlayer.playVideo();
-      try { bgPlayer.unMute(); bgPlayer.setVolume(100); } catch {}
-      // Didn't reach PLAYING within a few seconds → the track is API-restricted; flag it.
-      clearTimeout(bgWatch);
-      bgWatch = setTimeout(() => {
-        let st = -1; try { st = bgPlayer.getPlayerState(); } catch {}
-        if (st !== 1) markBgBlocked();
-      }, 4000);
+      showBgPlayer();
     }
   } catch {}
 };
