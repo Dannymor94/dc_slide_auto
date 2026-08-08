@@ -448,6 +448,9 @@ function setupControls() {
     else if (e.code === 'KeyF' && !e.metaKey && !e.ctrlKey && !e.altKey) {
       isFs() ? exitFs() : enterFs(); e.preventDefault();   // F toggles fullscreen (enter AND exit)
     }
+    else if (e.code === 'KeyM' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      window.dcToggleBgMusic && window.dcToggleBgMusic(); e.preventDefault();   // M → фоновая музыка
+    }
     else if (e.key === 'Escape' && help && !help.hasAttribute('hidden')) {
       toggleHelp(false); e.preventDefault(); e.stopImmediatePropagation();
     }

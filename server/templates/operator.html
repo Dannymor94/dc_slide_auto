@@ -293,6 +293,9 @@
   }
   .song-card.found { border-color: rgba(201,119,61,0.45); }
   .song-card.stub  { border-color: rgba(220,80,80,0.35); }
+  .song-card.dragging { opacity: 0.35; }
+  .song-card.drag-over { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .song-card .grip { align-self: center; padding: 0.2rem 0.1rem 0.2rem 0; }
   .song-num  { font-size: 0.7rem; font-weight: 700; color: var(--accent); background: rgba(201,119,61,0.12); border-radius: 4px; padding: 0.15rem 0.4rem; white-space: nowrap; flex-shrink: 0; }
   .song-text { flex: 1; min-width: 0; }
   .song-translit { font-size: 0.85rem; font-weight: 600; }
@@ -1084,6 +1087,35 @@ function songType(n) {
   return 'none';
 }
 
+// Drag-to-reorder song cards. Unlike program/news (array-backed), song order is just the
+// DOM order of #song-cards .song-card — so we reorder the nodes directly, then save.
+function setupSongDrag(card) {
+  card.addEventListener('dragstart', e => {
+    dragSrc = card; dragKind = 'song';
+    e.dataTransfer.effectAllowed = 'move';
+    requestAnimationFrame(() => card.classList.add('dragging'));
+  });
+  card.addEventListener('dragend', () => {
+    card.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+    dragSrc = null;
+  });
+  card.addEventListener('dragover', e => {
+    if (!dragSrc || dragSrc === card || dragKind !== 'song') return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.drag-over').forEach(x => x.classList.remove('drag-over'));
+    card.classList.add('drag-over');
+  });
+  card.addEventListener('drop', e => {
+    if (!dragSrc || dragSrc === card || dragKind !== 'song') return;
+    e.preventDefault(); card.classList.remove('drag-over');
+    const cards = [...document.querySelectorAll('#song-cards .song-card')];
+    if (cards.indexOf(dragSrc) < cards.indexOf(card)) card.after(dragSrc);
+    else card.before(dragSrc);
+    scheduleSave();
+  });
+}
+
 function renderSongCard(n) {
   const type = songType(n);
   const s = catalog.find(q => q.number === n);
@@ -1117,6 +1149,10 @@ function renderSongCard(n) {
       </div>
       <button class="btn-rm-song">✕</button>`;
   }
+  // grip + drag-to-reorder: song order on the deck = DOM order of the cards (doSave reads it)
+  card.insertAdjacentHTML('afterbegin', '<span class="grip" title="Перетащите, чтобы изменить порядок">⠿</span>');
+  card.draggable = true;
+  setupSongDrag(card);
   card.querySelector('.btn-rm-song').addEventListener('click', () => {
     card.remove(); scheduleSave();
   });
