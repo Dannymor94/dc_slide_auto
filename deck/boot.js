@@ -294,7 +294,7 @@ function loadYTApi(cb) {
 // slides. Plays UNDER the visible slide (not cinema). The host is off-screen and the
 // iframe is tabindex=-1 + pointer-events:none → it can never grab arrow keys. Always
 // mutually exclusive with the video/final players (never two sounds at once). ──
-let bgPlayer = null, bgReady = false;
+let bgPlayer = null, bgWatch = null;
 
 // Parse a bg-music URL → { id, list }. Drops auto-radio (RD…) and Liked/WatchLater
 // lists (YouTube won't play those in an embed); keeps real playlists (PL/UU/OL).
@@ -345,8 +345,7 @@ function setupBgMusic(url) {
         videoId: src.id || undefined,
         playerVars,
         events: {
-          onReady: () => { bgReady = true; },
-          onStateChange: e => syncBgButtons(e.data === 1),   // 1 = PLAYING
+          onStateChange: e => { if (e.data === 1) clearTimeout(bgWatch); syncBgButtons(e.data === 1); },  // PLAYING → cancel block-watch
           onError: () => setBgUnavailable(),
         },
       });
@@ -367,11 +366,23 @@ function setBgUnavailable() {
   document.querySelectorAll('.info-music-btn').forEach(b => b.classList.add('unavailable'));
 }
 
+// A track that cued but never actually PLAYS via the API (label-restricted: it buffers
+// then reverts) → fade the button and say so, instead of the operator guessing blindly.
+function markBgBlocked() {
+  document.querySelectorAll('.info-music-btn').forEach(b => {
+    b.classList.add('unavailable');
+    const lbl = b.querySelector('.info-music-lbl');
+    if (lbl) lbl.textContent = 'трек недоступен';
+  });
+}
+
 function pauseBg() { try { if (bgPlayer && bgPlayer.pauseVideo) bgPlayer.pauseVideo(); } catch {} }
 
 // Toggle from the info-slide button (global — the button uses inline onclick).
 window.dcToggleBgMusic = () => {
-  if (!bgPlayer || !bgReady) return;   // API not up / player not ready yet → no-op
+  // Guard on the METHOD existing (it appears once the player is ready) rather than an
+  // onReady flag — the onReady event can be flaky, and gating on it left the button dead.
+  if (!bgPlayer || typeof bgPlayer.playVideo !== 'function') return;
   try {
     if (bgPlayer.getPlayerState && bgPlayer.getPlayerState() === 1) {
       bgPlayer.pauseVideo();
@@ -384,6 +395,12 @@ window.dcToggleBgMusic = () => {
       try { bgPlayer.mute(); } catch {}
       bgPlayer.playVideo();
       try { bgPlayer.unMute(); bgPlayer.setVolume(100); } catch {}
+      // Didn't reach PLAYING within a few seconds → the track is API-restricted; flag it.
+      clearTimeout(bgWatch);
+      bgWatch = setTimeout(() => {
+        let st = -1; try { st = bgPlayer.getPlayerState(); } catch {}
+        if (st !== 1) markBgBlocked();
+      }, 4000);
     }
   } catch {}
 };

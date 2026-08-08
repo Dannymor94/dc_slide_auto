@@ -310,6 +310,17 @@
 
   /* Actions */
   .actions { margin: 1.2rem 0.8rem 0; display: flex; flex-direction: column; gap: 0.7rem; }
+  .save-banner {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.6rem 0.9rem; border-radius: 10px;
+    font-size: 0.85rem; font-weight: 600; border: 1px solid;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+  }
+  .save-banner span:first-child { font-size: 1rem; line-height: 1; }
+  .save-banner.idle   { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); color: var(--text-muted); }
+  .save-banner.saving { background: rgba(201,119,61,0.12); border-color: rgba(201,119,61,0.35); color: var(--accent-light); }
+  .save-banner.saved  { background: rgba(90,171,108,0.16); border-color: rgba(90,171,108,0.45); color: var(--success); }
+  .save-banner.error  { background: rgba(224,92,92,0.16); border-color: rgba(224,92,92,0.45); color: var(--danger); }
   .btn-primary {
     width: 100%; background: var(--accent); color: #fff;
     border: none; border-radius: var(--radius); font-size: 1rem;
@@ -501,6 +512,9 @@
 
 <!-- ── Actions ────────────────────────────────────────────────────────────── -->
 <div class="actions">
+  <div class="save-banner idle" id="save-banner">
+    <span id="save-banner-icon">☁</span><span id="save-banner-text">Правки сохраняются автоматически</span>
+  </div>
   <button class="btn-primary" onclick="openDeck()">Собрать и открыть дек</button>
   <div class="btn-row">
     <button class="btn-secondary" onclick="openDeck()">Превью</button>
@@ -1249,10 +1263,24 @@ async function doSave() {
   }
 }
 
+const SAVE_BANNER = {
+  idle:   ['☁', 'Правки сохраняются автоматически'],
+  saving: ['⏳', 'Сохраняю…'],
+  saved:  ['✓', 'Сохранено'],
+  error:  ['✗', 'Ошибка сохранения — проверь связь'],
+};
 function setSave(state, text) {
   const el = document.getElementById('save-ind');
   el.className = 'save-ind ' + state;
   document.getElementById('save-text').textContent = text;
+  // prominent, always-visible banner right above the «Собрать» button
+  const b = document.getElementById('save-banner');
+  if (b) {
+    b.className = 'save-banner ' + state;
+    const [ic, tx] = SAVE_BANNER[state] || SAVE_BANNER.idle;
+    document.getElementById('save-banner-icon').textContent = ic;
+    document.getElementById('save-banner-text').textContent = tx;
+  }
 }
 
 // ── Collapse ───────────────────────────────────────────────────────────────────
