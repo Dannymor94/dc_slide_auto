@@ -341,6 +341,7 @@ function setupBgMusic(url) {
     if (src.list) {
       playerVars.listType = 'playlist';
       playerVars.list = src.list;
+      playerVars.loop = 1;   // loop the whole playlist → background music never runs out
     } else {
       videoId = src.id || undefined;
     }
@@ -351,7 +352,15 @@ function setupBgMusic(url) {
         videoId,
         playerVars,
         events: {
-          onStateChange: e => { if (e.data === 1) hideBgPlayer(); syncBgButtons(e.data === 1); },  // PLAYING → tuck away, audio continues
+          onStateChange: e => {
+            if (e.data === 1) hideBgPlayer();   // PLAYING → tuck away, audio continues
+            // ENDED (0): the browser's autoplay policy blocks the playlist's OWN
+            // auto-advance (it counts as a gestureless play → pause). Force the next
+            // track ourselves — allowed because the first native click already
+            // "activated" the player, so programmatic advance keeps sound going.
+            if (e.data === 0 && src.list) { try { bgPlayer.nextVideo(); } catch {} }
+            syncBgButtons(e.data === 1);
+          },
           onError: () => setBgUnavailable(),
         },
       });
