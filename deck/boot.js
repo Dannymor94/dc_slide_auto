@@ -298,23 +298,13 @@ function loadYTApi(cb) {
 // with the video/final players (never two sounds at once). ──
 let bgPlayer = null;
 
-// Parse a bg-music URL → { id, list }. Drops auto-radio (RD…) and Liked/WatchLater
-// lists (YouTube won't play those in an embed); keeps real playlists (PL/UU/OL).
-function parseBgSource(url) {
-  try {
-    const u = new URL(url);
-    let id = u.searchParams.get('v');
-    if (!id && u.hostname === 'youtu.be') id = u.pathname.slice(1);
-    const raw = u.searchParams.get('list');
-    const list = raw && /^(PL|UU|OL)/.test(raw) ? raw : null;
-    if (!id && !list) return null;
-    return { id: id || null, list };
-  } catch { return null; }
-}
-
 function setupBgMusic(url) {
-  const src = parseBgSource(url || '');
-  if (!src) return;   // no/invalid url → the info button isn't rendered either
+  // Build the player from the SAME embed URL the video slide uses. It correctly keeps
+  // radio mixes (RD…) and real playlists (PL/UU/OL…) so the queue advances, and drops
+  // only private lists (LL/WL). The earlier bespoke parser dropped RD → a radio-mix URL
+  // collapsed to its single seed video → "доиграл и встал на паузу". null → no button.
+  const embed = youtubeEmbedUrl(url || '');
+  if (!embed) return;
   loadYTApi(() => {
     // Small real player, bottom-left, above the ▶ button. Invisible until opened (opacity:0);
     // opacity — NOT display:none — so once started the audio keeps playing while tucked away,
@@ -328,37 +318,27 @@ function setupBgMusic(url) {
     hint.style.cssText = 'font:600 11px/1.35 var(--font-body,sans-serif); color:#fff;'
       + ' background:rgba(20,22,31,.96); padding:6px 10px; text-align:center;';
     hint.textContent = 'Нажмите ▶ в плеере, чтобы включить музыку';
-    const mount = document.createElement('div');   // YT.Player REPLACES this with its iframe
-    host.appendChild(hint); host.appendChild(mount);
+    // A real iframe with the embed src (list preserved) — wrapped by YT.Player for
+    // control/state, exactly like setupCinema wraps the video slide's iframes.
+    const frame = document.createElement('iframe');
+    frame.src = embed;
+    frame.width = '264'; frame.height = '149';
+    frame.setAttribute('allow', 'autoplay; encrypted-media');
+    frame.setAttribute('tabindex', '-1');
+    frame.style.cssText = 'border:0; display:block;';
+    host.appendChild(hint); host.appendChild(frame);
     document.body.appendChild(host);
 
-    const playerVars = { controls: 1, playsinline: 1, rel: 0, origin: location.origin };
-    // A playlist must be loaded via listType+list and WITHOUT a seed videoId — passing
-    // both pins playback to the single video and the queue never advances (the bug:
-    // "играет только первый ролик"). listType:'playlist' makes the player queue every
-    // track and auto-advance in order. Single video (no list) → plain videoId.
-    let videoId;
-    if (src.list) {
-      playerVars.listType = 'playlist';
-      playerVars.list = src.list;
-      playerVars.loop = 1;   // loop the whole playlist → background music never runs out
-    } else {
-      videoId = src.id || undefined;
-    }
-
     try {
-      bgPlayer = new YT.Player(mount, {
-        width: '264', height: '149',
-        videoId,
-        playerVars,
+      bgPlayer = new YT.Player(frame, {
         events: {
           onStateChange: e => {
             if (e.data === 1) hideBgPlayer();   // PLAYING → tuck away, audio continues
-            // ENDED (0): the browser's autoplay policy blocks the playlist's OWN
+            // ENDED (0): the browser's autoplay policy can block a playlist/radio's OWN
             // auto-advance (it counts as a gestureless play → pause). Force the next
             // track ourselves — allowed because the first native click already
             // "activated" the player, so programmatic advance keeps sound going.
-            if (e.data === 0 && src.list) { try { bgPlayer.nextVideo(); } catch {} }
+            if (e.data === 0) { try { bgPlayer.nextVideo(); } catch {} }
             syncBgButtons(e.data === 1);
           },
           onError: () => setBgUnavailable(),
