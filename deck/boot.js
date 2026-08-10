@@ -333,12 +333,22 @@ function setupBgMusic(url) {
     document.body.appendChild(host);
 
     const playerVars = { controls: 1, playsinline: 1, rel: 0, origin: location.origin };
-    if (src.list) playerVars.list = src.list;   // a playlist loops on its own
+    // A playlist must be loaded via listType+list and WITHOUT a seed videoId — passing
+    // both pins playback to the single video and the queue never advances (the bug:
+    // "играет только первый ролик"). listType:'playlist' makes the player queue every
+    // track and auto-advance in order. Single video (no list) → plain videoId.
+    let videoId;
+    if (src.list) {
+      playerVars.listType = 'playlist';
+      playerVars.list = src.list;
+    } else {
+      videoId = src.id || undefined;
+    }
 
     try {
       bgPlayer = new YT.Player(mount, {
         width: '264', height: '149',
-        videoId: src.id || undefined,
+        videoId,
         playerVars,
         events: {
           onStateChange: e => { if (e.data === 1) hideBgPlayer(); syncBgButtons(e.data === 1); },  // PLAYING → tuck away, audio continues
