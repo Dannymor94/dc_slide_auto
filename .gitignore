@@ -1,3 +1,8 @@
+# ── Internal working docs — kept local, NOT published to GitHub ──
+CLAUDE.md
+DEPLOY.md
+PLAN.md
+
 # ── Secrets — NEVER commit (Telegram/Airtable/Groq keys, operator password) ──
 .env
 .env.*
