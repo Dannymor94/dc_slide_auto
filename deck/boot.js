@@ -387,8 +387,47 @@ window.dcToggleBgMusic = () => {
   } catch {}
 };
 
+// ── Wake Lock: keep the screen awake during the show so the display never sleeps
+// mid-presentation. The Screen Wake Lock API auto-releases when the tab goes to the
+// background (или экран блокируется) → re-acquire on visibilitychange while the show
+// is on. Held only during the show (deck fullscreen); released on exit to free the
+// lock. No-op where unsupported (older Safari) or blocked → the deck stays intact. ──
+let _wakeLock = null;
+let _wakeWanted = false;
+
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  if (_wakeLock) return;
+  try {
+    _wakeLock = await navigator.wakeLock.request('screen');
+    // The browser can drop the lock on its own (tab hidden, power event) — clear our
+    // handle so a later re-acquire attempt actually re-requests.
+    _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+  } catch { _wakeLock = null; }   // rejected (no user gesture / blocked) → screen may sleep, deck fine
+}
+
+async function releaseWakeLock() {
+  const l = _wakeLock; _wakeLock = null;
+  try { await l?.release(); } catch {}
+}
+
+function setupWakeLock() {
+  // Re-acquire when the tab becomes visible again while the show is on (the API drops
+  // the lock whenever the document is hidden).
+  document.addEventListener('visibilitychange', () => {
+    if (_wakeWanted && document.visibilityState === 'visible') acquireWakeLock();
+  });
+}
+
+// Called from the fullscreenchange handler: show on → hold the lock, show off → drop it.
+function setWakeLockForShow(on) {
+  _wakeWanted = on;
+  if (on) acquireWakeLock(); else releaseWakeLock();
+}
+
 // ── Presenter controls: fullscreen (start overlay + corner toggle) + hotkeys help ──
 function setupControls() {
+  setupWakeLock();
   const fsEl = document.documentElement;
   const isFs = () => !!document.fullscreenElement;
   const enterFs = () => { try { fsEl.requestFullscreen?.(); } catch {} };
@@ -418,6 +457,7 @@ function setupControls() {
   document.addEventListener('fullscreenchange', () => {
     const deckFs = isDeckFs();
     document.body.classList.toggle('dc-fs', deckFs);
+    setWakeLockForShow(deckFs);   // keep the screen awake while the show is fullscreen
     if (fsBtn) fsBtn.textContent = document.fullscreenElement ? '🗕' : '⛶';
     // hide strip on entering deck fullscreen, restore on exit; applyStrip() also
     // re-runs Reveal.layout() → fixes any scale drift after a fullscreen episode
