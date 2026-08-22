@@ -266,8 +266,6 @@
     background: rgba(220,120,60,0.12); border: 1px solid rgba(220,120,60,0.35);
     color: #e8a87c; font-size: 0.82rem; line-height: 1.4; }
   .top-alert code { background: rgba(0,0,0,0.28); padding: 0 0.25rem; border-radius: 4px; font-size: 0.9em; }
-  .btn-apply-suggest { background: var(--accent, #E8934A); color: #fff; border: none; border-radius: 6px;
-    padding: 0.18rem 0.6rem; font-size: 0.72rem; font-weight: 600; cursor: pointer; margin-left: 0.2rem; }
   .build-status { margin: 0.2rem 0 0.6rem; padding: 0.5rem 0.8rem; border-radius: 9px; font-size: 0.78rem; }
   .build-status.ok  { background: rgba(60,180,100,0.10); border: 1px solid rgba(60,180,100,0.3); color: #8fd6a8; }
   .build-status.bad { background: rgba(220,120,60,0.12); border: 1px solid rgba(220,120,60,0.35); color: #e8a87c; }
@@ -360,7 +358,14 @@
   }
   .picker-head h3 { flex: 1; font-size: 0.95rem; font-weight: 700; color: var(--accent); }
   .picker-close { background: none; border: none; color: var(--text-muted); font-size: 1.3rem; cursor: pointer; padding: 0 0.2rem; line-height: 1; }
-  .picker-search-wrap { padding: 0.7rem 1rem 0.4rem; }
+  .picker-search-wrap { padding: 0.7rem 1rem 0.4rem; display: flex; gap: 0.5rem; align-items: center; }
+  .picker-search-wrap input { flex: 1; min-width: 0; }
+  .btn-new-song {
+    background: none; border: 1px solid rgba(201,119,61,0.3); border-radius: 6px;
+    color: var(--accent-light); font-size: 0.75rem; cursor: pointer;
+    padding: 0.35rem 0.7rem; font-family: inherit; white-space: nowrap; flex-shrink: 0;
+  }
+  .btn-new-song:hover { background: rgba(201,119,61,0.08); border-color: rgba(201,119,61,0.5); }
   .picker-body { overflow-y: auto; padding: 0.3rem 0.6rem 0.9rem; }
   .picker-row {
     display: flex; align-items: center; gap: 0.7rem;
@@ -468,7 +473,7 @@
       <button class="btn-add-song" onclick="addSong()">+ Добавить</button>
     </div>
     <div class="song-cards" id="song-cards"></div>
-    <div class="field-hint" id="song-suggest-hint"></div>
+    <div class="field-hint" id="song-source-hint" style="display:none"></div>
 
     <span class="flabel">Видео (YouTube)</span>
     <input type="url" id="video-url" placeholder="Пусто = авто-видео Дады из СВАДХЬЯЯ">
@@ -525,6 +530,30 @@
   </div>
 </div>
 
+<!-- ── Add-song-by-image modal ─────────────────────────────────────────────── -->
+<div class="picker-overlay" id="song-upload">
+  <div class="picker">
+    <div class="picker-head">
+      <h3>Новая ПС по картинке слайда</h3>
+      <button class="picker-close" id="upload-close" title="Закрыть">✕</button>
+    </div>
+    <div style="padding:1rem; display:flex; flex-direction:column; gap:0.7rem">
+      <input type="file" id="upload-file" accept="image/png,image/jpeg,image/webp">
+      <img id="upload-preview" style="display:none; max-width:100%; border-radius:8px; max-height:38vh; object-fit:contain; background:rgba(0,0,0,0.25)">
+      <div id="upload-ocr-status" style="display:none; font-size:0.83rem; opacity:0.65; min-height:1.1em"></div>
+      <div class="field-hint">Проверь распознанные поля и поправь, если нужно. Так ПС попадёт в каталог и будет искаться по номеру / названию / переводу.</div>
+      <span class="flabel" style="margin-top:0">Номер ПС</span>
+      <input type="number" id="upload-number" min="1" placeholder="напр. 4">
+      <span class="flabel" style="margin-top:0">Название</span>
+      <input type="text" id="upload-title" placeholder="напр. Модхур гити">
+      <span class="flabel" style="margin-top:0">Русский перевод</span>
+      <input type="text" id="upload-translation" placeholder="напр. Песня сладости">
+      <div class="field-hint" id="upload-error" style="color:#e57; display:none"></div>
+      <button class="btn-primary" id="upload-submit" onclick="submitSongUpload()">Добавить в каталог</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Song picker modal ───────────────────────────────────────────────────── -->
 <div class="picker-overlay" id="song-picker">
   <div class="picker">
@@ -533,11 +562,18 @@
       <button class="picker-close" id="picker-close" title="Закрыть">✕</button>
     </div>
     <div class="picker-search-wrap">
-      <input type="text" id="picker-search" placeholder="Поиск по номеру или названию…" autocomplete="off">
+      <input type="text" id="picker-search" placeholder="Номер, название или перевод…" autocomplete="off">
+      <button class="btn-new-song" onclick="openNewSongFromPicker()">+ Новая ПС</button>
     </div>
     <div class="picker-body" id="picker-body"></div>
   </div>
 </div>
+
+<!-- Tesseract.js — self-hosted OCR for the PS image-upload modal.
+     Loaded synchronously so it's available by the time the modal opens.
+     If the file is missing (setup_ocr.sh not run yet), OCR is silently disabled;
+     the form still works for manual entry. -->
+<script src="/assets/ocr/tesseract.min.js" onerror="window._tesseractLoadFailed=true"></script>
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────────
@@ -559,6 +595,7 @@ let newsAutoOverridden = false;
 let newsManual = [];
 // featuredNews: manual-only accent block (overrides.featured_news), separate from news
 let featuredNews = [];
+let songSource = 'fallback';   // 'manual' | 'auto' | 'fallback' — set by resolveSongs()
 
 let saveTimer = null;
 let dragSrc = null;
@@ -604,9 +641,11 @@ function loadForm() {
   document.getElementById('plan').value     = sel.plan ?? '';
   renderAutoMoney();
   document.getElementById('song-cards').innerHTML = '';
-  (sel.song_numbers || []).forEach(renderSongCard);   // only the operator's own pick — never silent-prefill
+  const rs = resolveSongs();                 // mirrors deck/merge.js priority
+  rs.numbers.forEach(renderSongCard);
+  songSource = rs.source;                    // 'manual' | 'auto' | 'fallback'
   renderBuildStatus();     // channel А: last-build status line
-  renderSongSuggest();     // suggestion line + [Применить]
+  renderSongSource();      // where the current numbers come from
   renderTopAlert();        // channel А: chat songs not in base
 
   // Дада
@@ -935,6 +974,7 @@ function addSong() {
   if (isNaN(n) || n < 1) return;
   inp.value = '';
   renderSongCard(n);
+  songSource = 'manual'; renderSongSource();   // operator edited → now a manual pick
   scheduleSave();
 }
 document.getElementById('song-num-input').addEventListener('keydown', e => {
@@ -957,6 +997,10 @@ function openSongPicker() {
 }
 function closeSongPicker() {
   document.getElementById('song-picker').classList.remove('open');
+}
+function openNewSongFromPicker() {
+  closeSongPicker();
+  openSongUpload();
 }
 
 function renderPicker(filter) {
@@ -1010,6 +1054,7 @@ function renderPicker(filter) {
     if (!isAdded) {
       row.addEventListener('click', () => {
         renderSongCard(s.number);
+        songSource = 'manual'; renderSongSource();   // operator edited → manual pick
         scheduleSave();
         renderPicker(document.getElementById('picker-search').value);
       });
@@ -1026,6 +1071,228 @@ document.getElementById('song-picker').addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeSongPicker();
 });
+
+// ── Add a new image-backed PS (POST /api/song, OCR-assisted) ─────────────────────
+// Tesseract.js runs in the operator's browser — no VPS OCR, no external calls.
+// If /assets/ocr/tesseract.min.js is absent the form still works for manual entry.
+//
+// Race guard: each file selection gets a new _ocrToken. Stale OCR results are dropped.
+// Dirty guard: a field the operator edited manually is never overwritten by OCR.
+
+let _ocrWorker = null;    // Tesseract worker — created once, reused across sessions
+let _ocrToken  = 0;       // incremented on each file selection; stale results are discarded
+const _ocrDirty = new Set();  // upload-field ids the operator has edited manually
+
+// Track manual edits — once touched, OCR won't overwrite that field
+['upload-number', 'upload-title', 'upload-translation'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => _ocrDirty.add(id));
+});
+
+function _setOcrStatus(msg) {
+  const el = document.getElementById('upload-ocr-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function openSongUpload() {
+  document.getElementById('song-upload').classList.add('open');
+  ['upload-file','upload-number','upload-title','upload-translation'].forEach(id => document.getElementById(id).value = '');
+  const p = document.getElementById('upload-preview'); p.style.display = 'none'; p.src = '';
+  document.getElementById('upload-error').style.display = 'none';
+  _setOcrStatus('');
+  _ocrToken++;        // invalidate any stale OCR from a previous modal session
+  _ocrDirty.clear();
+}
+function closeSongUpload() { document.getElementById('song-upload').classList.remove('open'); }
+
+document.getElementById('upload-close').addEventListener('click', closeSongUpload);
+document.getElementById('song-upload').addEventListener('click', e => {
+  if (e.target.id === 'song-upload') closeSongUpload();
+});
+
+document.getElementById('upload-file').addEventListener('change', e => {
+  const f = e.target.files[0];
+  const p = document.getElementById('upload-preview');
+  if (!f) { p.style.display = 'none'; _setOcrStatus(''); return; }
+  p.src = URL.createObjectURL(f); p.style.display = 'block';
+  // New file → new OCR session; clear dirty state and start
+  _ocrDirty.clear();
+  const token = ++_ocrToken;
+  _ocrRecognize(f, token);   // fire-and-forget; errors are silently suppressed
+});
+
+// ── OCR internals ─────────────────────────────────────────────────────────────
+
+async function _getOcrWorker() {
+  if (_ocrWorker) return _ocrWorker;
+  if (typeof Tesseract === 'undefined') throw new Error('Tesseract.js не загружен');
+  _ocrWorker = await Tesseract.createWorker('rus+eng', 1, {
+    workerPath: '/assets/ocr/worker.min.js',
+    corePath:   '/assets/ocr',
+    langPath:   '/assets/ocr/langs',
+  });
+  return _ocrWorker;
+}
+
+// Crop image element to a canvas using relative coordinates (0–1)
+function _cropCanvas(imgEl, rx, ry, rw, rh) {
+  const W = imgEl.naturalWidth, H = imgEl.naturalHeight;
+  const c = document.createElement('canvas');
+  c.width  = Math.max(1, Math.floor(W * rw));
+  c.height = Math.max(1, Math.floor(H * rh));
+  c.getContext('2d').drawImage(imgEl,
+    Math.floor(W * rx), Math.floor(H * ry),
+    c.width, c.height, 0, 0, c.width, c.height);
+  return c;
+}
+
+// Remove combining diacritical marks (stress marks Tesseract adds to Cyrillic)
+function _stripDiacritics(s) { return s.replace(/[̀-ͯ]/g, ''); }
+
+// Sentence-case with diacritics stripped: "ПУРНОТБЕР ГИТО" → "Пурнотбер гито"
+function _sentenceCase(s) {
+  s = _stripDiacritics(s.trim());
+  return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
+}
+
+// Parse number from header text "Прабхат Самгит N"
+function _ocrParseNumber(text) {
+  const m = text.match(/[Пп]рабхат\s*[Сс]амгит\s*(\d+)/);
+  if (m) return parseInt(m[1], 10);
+  const nums = [...text.matchAll(/\b(\d{1,4})\b/g)]
+    .map(x => parseInt(x[1], 10)).filter(n => n >= 1 && n <= 9999);
+  return nums.length === 1 ? nums[0] : null;
+}
+
+// Is a string predominantly uppercase (works for Cyrillic + Latin)?
+function _isAllCaps(s) {
+  const letters = (s.match(/[а-яёА-ЯЁa-zA-Z]/g) || []);
+  const upper   = letters.filter(c => c === c.toUpperCase() && c !== c.toLowerCase());
+  return letters.length > 2 && upper.length / letters.length > 0.85;
+}
+
+// Parse an all-caps subtitle line into {title, translation}. Real formats observed:
+//   "ПУРНОТБЕР ГИТО (ПЕСНЯ РЕАЛИЗАЦИИ)" → title:"Пурнотбер гито"  translation:"Песня реализации"
+//   "ЧОМПОКО БОНЕ МОДХУРО ШОПОНЕ"       → title:"Чомпоко боне..."  translation:""
+//   "ПЕСНЯ ОСВОБОЖДЕНИЯ"                 → title:"Песня освобождения" translation:""
+// Called only when the input is already confirmed all-caps (see _ocrRecognize).
+function _parseSubtitle(line) {
+  line = _stripDiacritics(line.trim());
+  if (!line || line.length < 3) return { title: '', translation: '' };
+
+  const m = line.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+  if (m) {
+    const left = m[1].trim(), right = m[2].trim();
+    if (_isAllCaps(left)) {
+      return { title: _sentenceCase(left), translation: _sentenceCase(right) };
+    }
+  }
+  // No parens or left side not ALL CAPS
+  if (_isAllCaps(line)) return { title: _sentenceCase(line), translation: '' };
+  // Starts with Cyrillic capital → Russian translation subtitle
+  return { title: '', translation: line.charAt(0).toUpperCase() + line.slice(1) };
+}
+
+// Only write to a field if the operator hasn't touched it
+function _ocrFill(fieldId, value) {
+  if (_ocrDirty.has(fieldId) || !value) return;
+  document.getElementById(fieldId).value = value;
+}
+
+async function _ocrRecognize(file, token) {
+  try {
+    _setOcrStatus('Распознаю данные слайда…');
+
+    // Load into HTMLImageElement for canvas cropping
+    const blobUrl = URL.createObjectURL(file);
+    const img = await new Promise((res, rej) => {
+      const el = new Image();
+      el.onload  = () => res(el);
+      el.onerror = () => rej(new Error('image load failed'));
+      el.src = blobUrl;
+    });
+    if (_ocrToken !== token) { URL.revokeObjectURL(blobUrl); return; }
+
+    const worker = await _getOcrWorker();
+    if (_ocrToken !== token) { URL.revokeObjectURL(blobUrl); return; }
+
+    // ── Single header crop: full width, top 25% ────────────────────────────
+    // Real slides: "Прабхат Самгит N" on line 1, optional all-caps subtitle on line 2.
+    // Body text always mixes transliteration CAPS + Russian lowercase on the same line,
+    // so _isAllCaps() reliably separates subtitle from body.
+    const headerResult = await worker.recognize(_cropCanvas(img, 0, 0, 1.0, 0.25));
+    if (_ocrToken !== token) { URL.revokeObjectURL(blobUrl); return; }
+
+    const headerLines = headerResult.data.text
+      .split(/\r?\n/)
+      .map(l => _stripDiacritics(l.trim()))
+      .filter(l => l.length > 1);
+
+    const number = _ocrParseNumber(headerLines[0] || '');
+    _ocrFill('upload-number', number ? String(number) : null);
+
+    // Some slides embed the subtitle on the same line as the number (e.g. "ПС 6 - ПЕСНЯ ПРОБУЖДЕНИЯ").
+    // Others put it on a dedicated second line (e.g. "ПУРНОТБЕР ГИТО (ПЕСНЯ РЕАЛИЗАЦИИ)").
+    const suffixM = (headerLines[0] || '').match(/[Пп]рабхат\s*[Сс]амгит\s*\d+\s*[-–—]?\s*(.+)/);
+    const suffixCandidate = suffixM ? suffixM[1].trim() : '';
+    const subtitleLine = (_isAllCaps(suffixCandidate) ? suffixCandidate : null)
+      || (_isAllCaps(headerLines[1] || '') ? (headerLines[1] || '') : null);
+    if (subtitleLine) {
+      // Russian-only genre labels ("ПЕСНЯ ОСВОБОЖДЕНИЯ") belong to the subtitle DB field,
+      // not to title_translit — skip them; upload-title requires Bengali transliteration.
+      // The "TITLE (TRANSLATION)" format (parens) is handled by _parseSubtitle regardless.
+      const isRussianLabel = subtitleLine.toUpperCase().includes('ПЕСНЯ') && !subtitleLine.includes('(');
+      if (!isRussianLabel) {
+        const { title, translation } = _parseSubtitle(subtitleLine);
+        _ocrFill('upload-title', title);
+        _ocrFill('upload-translation', translation);
+      }
+    }
+
+    URL.revokeObjectURL(blobUrl);
+    _setOcrStatus('');
+  } catch (err) {
+    console.warn('[ocr]', err.message || err);
+    _setOcrStatus('');   // hide status; form remains fully functional for manual entry
+  }
+}
+
+async function submitSongUpload() {
+  const err = document.getElementById('upload-error');
+  const show = m => { err.textContent = m; err.style.display = 'block'; };
+  const file = document.getElementById('upload-file').files[0];
+  const number = parseInt(document.getElementById('upload-number').value, 10);
+  const title = document.getElementById('upload-title').value.trim();
+  const translation = document.getElementById('upload-translation').value.trim();
+  if (!file)            return show('Выбери картинку слайда.');
+  if (!(number >= 1))   return show('Укажи номер ПС.');
+  if (!title)           return show('Укажи название.');
+
+  const btn = document.getElementById('upload-submit');
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('image', file); fd.append('number', number);
+    fd.append('title', title); fd.append('translation', translation);
+    const r = await fetch('/api/song', { method: 'POST', body: fd });
+    if (!r.ok) { show((await r.json().catch(() => ({}))).detail || `Ошибка ${r.status}`); return; }
+    const data = await r.json();
+    // Reflect new song in-memory so the card/picker/slide work without reload
+    if (!catalog.find(s => s.number === number)) {
+      catalog.push({ number, title_translit: title, translation_first_line: translation, stanzas: [], lang: 'translit' });
+    }
+    songImages[number] = data.image_path;
+    closeSongUpload();
+    renderSongCard(number);
+    songSource = 'manual'; renderSongSource();
+    scheduleSave();
+  } catch (e) {
+    show('Сеть недоступна: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
 // ТГ-suggestion note + a roll-up of numbers with no image AND no catalog text.
 // Канал А (статус-строка): последняя сборка + вердикт из /api/build-status.
 function renderBuildStatus() {
@@ -1054,30 +1321,57 @@ function renderTopAlert() {
     + '</b> — добавь картинку в <code>assets/songs/&lt;N&gt;.webp</code> (или текст в каталог).';
 }
 
-// Предложение из чата + [Применить]. Никогда не затирает выбор оператора молча —
-// перенос происходит только по явному клику.
-function renderSongSuggest() {
-  const el = document.getElementById('song-suggest-hint');
-  if (!el) return;
-  const suggested = manifest?.suggested_songs || [];
-  if (!suggested.length) { el.innerHTML = ''; return; }
-  const shown = [...document.querySelectorAll('#song-cards .song-card')].map(c => Number(c.dataset.number));
-  const applied = suggested.length === shown.length && suggested.every(n => shown.includes(n));
-  const list = suggested.map(n => '№' + n).join(', ');
-  if (applied) { el.innerHTML = '🎵 Из чата: <b>' + x(list) + '</b> — применено.'; return; }
-  const warn = shown.length ? ' <span style="color:var(--warn)">(заменит текущий выбор)</span>' : '';
-  el.innerHTML = '🎵 Предложено из чата: <b>' + x(list) + '</b> '
-    + '<button type="button" class="btn-apply-suggest" onclick="applySuggested()">Применить</button>' + warn;
+// ISO year×week for a "YYYY-MM-DD" string (same formula as deck/merge.js).
+function isoWeekYear(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = d.getDay() || 7;
+  const thu = new Date(d);
+  thu.setDate(d.getDate() + 4 - day);
+  const y = thu.getFullYear();
+  const jan1 = new Date(y, 0, 1);
+  return y * 100 + Math.ceil(((thu - jan1) / 86400000 + 1) / 7);
 }
 
-// Явный перенос suggested → song_numbers (карточки). Действие оператора, не молчаливое.
-function applySuggested() {
-  const suggested = manifest?.suggested_songs || [];
-  document.getElementById('song-cards').innerHTML = '';
-  suggested.forEach(renderSongCard);
-  renderSongSuggest();
-  renderTopAlert();
-  scheduleSave();
+// Song priority (mirrors deck/merge.js): manual pick wins ONLY when fresh
+// (selection.week_date's ISO week == the build week); otherwise the chat's
+// suggested_songs auto-apply; fallback keeps the old pick (never blank).
+// Returns {numbers, source: 'manual'|'auto'|'fallback'}.
+function resolveSongs() {
+  const selSongs  = (selection?.song_numbers) || [];
+  const suggested = (manifest?.suggested_songs) || [];
+  const selWeek   = isoWeekYear(selection?.week_date);
+  const buildWeek = isoWeekYear(manifest?.date);
+  const fresh = selWeek && buildWeek && selWeek === buildWeek;
+  if (fresh && selSongs.length) return { numbers: selSongs, source: 'manual' };
+  if (suggested.length)         return { numbers: suggested, source: 'auto' };
+  return { numbers: selSongs, source: 'fallback' };
+}
+
+// Where the currently-shown numbers come from. No «Применить» button — the chat's
+// numbers auto-apply on the deck; the operator only edits when they want different.
+function renderSongSource() {
+  const el = document.getElementById('song-source-hint');
+  if (!el) return;
+  const nums = currentSongNums();
+  el.style.display = '';
+  if (songSource === 'manual') {
+    el.style.color = '';
+    el.innerHTML = '✋ Задано вручную на эту неделю.';
+  } else if (songSource === 'auto') {
+    el.style.color = '';
+    el.innerHTML = '🎵 Из чата (авто): <b>' + x(nums.map(n => '№' + n).join(', '))
+      + '</b> — встанут в дек сами. Правь, только если нужно другое.';
+  } else {   // fallback: stale/empty selection and nothing from the chat
+    if (!nums.length) {
+      el.style.color = '';
+      el.innerHTML = '➖ Песни не заданы и из чата не пришли.';
+    } else {
+      el.style.color = 'var(--warn)';
+      const wd = (selection?.week_date || '').split('-').reverse().join('.');
+      el.innerHTML = '⚠️ С прошлой недели (' + x(wd) + '), из чата ничего не пришло — проверь.';
+    }
+  }
 }
 
 // what backs song N on the deck: image (priority) → text → nothing
@@ -1154,7 +1448,9 @@ function renderSongCard(n) {
   card.draggable = true;
   setupSongDrag(card);
   card.querySelector('.btn-rm-song').addEventListener('click', () => {
-    card.remove(); scheduleSave();
+    card.remove();
+    songSource = 'manual'; renderSongSource();   // operator edited → now a manual pick
+    scheduleSave();
   });
   document.getElementById('song-cards').appendChild(card);
 }
@@ -1264,7 +1560,11 @@ async function doSave() {
   const featuredArr = featuredNews.map(n => n.text).filter(Boolean);
 
   const body = {
-    week_date:    selection?.week_date ?? new Date().toISOString().slice(0, 10),
+    // week_date = the ДЧ week this selection is FOR (the build's target Sunday).
+    // Saving stamps the CURRENT week → the selection becomes "fresh" so manual
+    // picks win THIS week; next week the manifest date moves on and it goes stale,
+    // letting the chat's suggested_songs auto-apply again.
+    week_date:    manifest?.date ?? selection?.week_date ?? new Date().toISOString().slice(0, 10),
     song_numbers: songNums,
     video_url:       document.getElementById('video-url').value.trim(),
     final_video_url: document.getElementById('final-video-url').value.trim(),
