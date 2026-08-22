@@ -1417,12 +1417,14 @@ function renderSongCard(n) {
   card.className = (type === 'none') ? 'song-card stub' : 'song-card found';
   card.dataset.number = n;
   if (type === 'image') {
-    // image wins even if text also exists; show the title if we have one
+    // image wins even if text also exists; title is the primary identifier, image badge is secondary
+    const imgTitle = s ? x(s.title_translit) : '';
+    const imgSub   = s ? x(s.translation_first_line || '') : 'assets/songs/' + n;
     card.innerHTML = `
       <span class="song-num">№${n}</span>
       <div class="song-text">
-        <div class="song-translit">🖼 Картинка</div>
-        <div class="song-transl">${s ? x(s.title_translit) : 'assets/songs/' + n}</div>
+        <div class="song-translit">${imgTitle || '<span style="opacity:0.45;font-style:italic">нет названия</span>'}&ensp;<span style="opacity:0.45;font-size:0.8em">🖼</span></div>
+        <div class="song-transl">${imgSub}</div>
       </div>
       <button class="btn-rm-song">✕</button>`;
   } else if (type === 'text') {
