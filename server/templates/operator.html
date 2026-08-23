@@ -148,6 +148,13 @@
     background: rgba(var(--success-rgb),0.15); color: var(--success);
     border: 1px solid rgba(var(--success-rgb),0.3);
   }
+  .badge-warn-auto {
+    font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.15rem 0.5rem; border-radius: 20px;
+    background: rgba(var(--warn-rgb),0.15); color: var(--warn);
+    border: 1px solid rgba(var(--warn-rgb),0.3);
+  }
+  .section-head.auto-warn { border-color: rgba(var(--warn-rgb),0.35); }
   .sec-meta { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8rem; }
   .chevron { color: var(--text-muted); font-size: 0.8rem; transition: transform 0.2s; flex-shrink: 0; }
   .section-head.open .chevron { transform: rotate(180deg); }
@@ -516,7 +523,7 @@
 <div class="section">
   <div class="section-head" id="head-auto">
     <h2>Собирается само</h2>
-    <span class="badge-ok">✓ авто</span>
+    <span class="badge-ok" id="auto-status">✓ авто</span>
     <span class="sec-meta" id="auto-meta"></span>
     <span class="chevron">▾</span>
   </div>
@@ -726,7 +733,7 @@ async function init() {
   try {
     manifest = await fetch('/manifest.json').then(r => r.json());
     document.getElementById('week-label').textContent =
-      manifest.date ? `Сборка на ${manifest.date}` : 'Дата не задана';
+      manifest.date ? formatMeetingDate(manifest.date) : 'Дата не задана';
     document.getElementById('dada-auto-val').textContent =
       manifest.dada_comment || '(нет)';
   } catch {
@@ -756,6 +763,7 @@ function loadForm() {
   renderBuildStatus();     // channel А: last-build status line
   renderSongSource();      // where the current numbers come from
   renderTopAlert();        // channel А: chat songs not in base
+  updateAutoStatus();      // summary badge in automatic section head
 
   // Дада
   document.getElementById('ov-dada').value = ov.dada_comment ?? '';
@@ -1010,6 +1018,40 @@ function addFeatured() {
 function resetDada() {
   document.getElementById('ov-dada').value = '';
   scheduleSave();
+}
+
+// ── Meeting date display ───────────────────────────────────────────────────────
+function formatMeetingDate(iso) {
+  try {
+    const d = new Date(iso + 'T12:00:00');
+    const months = ['января','февраля','марта','апреля','мая','июня',
+                    'июля','августа','сентября','октября','ноября','декабря'];
+    const yr = d.getFullYear(), cur = new Date().getFullYear();
+    return yr !== cur
+      ? `${d.getDate()} ${months[d.getMonth()]} ${yr}`
+      : `${d.getDate()} ${months[d.getMonth()]}`;
+  } catch(e) { return iso; }
+}
+
+// ── Automatic section status badge ────────────────────────────────────────────
+function updateAutoStatus() {
+  const s = buildStatus || {};
+  const BUILD_STEPS = ['program','money','video','news','deploy'];
+  const buildBad = !!s.ts && BUILD_STEPS.some(k => s[k] && s[k].ok === false);
+  const missing = (manifest?.suggested_songs || []).filter(n => songType(n) === 'none');
+  const bad = buildBad || missing.length > 0;
+  const badge = document.getElementById('auto-status');
+  const head  = document.getElementById('head-auto');
+  if (!badge || !head) return;
+  if (bad) {
+    badge.className = 'badge-warn-auto';
+    badge.textContent = '⚠ внимание';
+    head.classList.add('auto-warn');
+  } else {
+    badge.className = 'badge-ok';
+    badge.textContent = '✓ авто';
+    head.classList.remove('auto-warn');
+  }
 }
 
 // ── Section meta summary ───────────────────────────────────────────────────────
