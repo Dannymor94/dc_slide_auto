@@ -371,7 +371,8 @@
     padding: 0.55rem 0.8rem; outline: none; transition: border-color 0.15s;
   }
   input:focus { border-color: var(--accent); }
-  .field-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem; font-style: italic; }
+  .field-hint   { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem; font-style: italic; }
+  .field-status { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.3rem; }
   .top-alert { margin: 0.2rem 0 0.9rem; padding: 0.7rem 0.9rem; border-radius: 10px;
     background: rgba(var(--alert-rgb),0.12); border: 1px solid rgba(var(--alert-rgb),0.35);
     color: var(--accent-light); font-size: 0.82rem; line-height: 1.4; }
@@ -623,13 +624,12 @@
         <span class="field-hint" id="video-auto-hint" style="flex:1;margin-top:0">Авто-видео: …</span>
         <button type="button" class="btn-reset" onclick="refreshAutoVideo()">↻ проверить</button>
       </div>
-      <div class="field-hint">Заполни поле, только чтобы вручную перекрыть авто-видео. Пусто — играет авто (или слайд Дады, если авто нет).</div>
-      <span class="flabel">Финальное видео / музыка (YouTube)</span>
+      <span class="flabel">Финальное видео / музыка</span>
       <input type="url" id="final-video-url" placeholder="https://youtube.com/watch?v=…">
-      <div class="field-hint">Запоминается навсегда: вписал один раз — живёт, пока не впишешь новую. Пусто — оставит прежнюю. Показывается последним в деке.</div>
-      <span class="flabel">🎵 Фоновая музыка (welcome / расписание)</span>
+      <div class="field-status">∞ Постоянная настройка · последний слайд в деке</div>
+      <span class="flabel">🎵 Фоновая музыка</span>
       <input type="url" id="bg-music-url" placeholder="https://youtube.com/watch?v=… (можно плейлист)">
-      <div class="field-hint">Кнопка ▶ появится на слайдах приветствия и расписания — запускаешь музыку фоном, контент виден. Запоминается навсегда. Пусто — кнопки нет.</div>
+      <div class="field-status">∞ Постоянная настройка · пусто — кнопки нет</div>
     </div>
 
     <!-- ── Сбор средств ───────────────────────────────────────────────────── -->
@@ -657,7 +657,7 @@
         <input type="checkbox" id="hide-urokimeditacii" style="width:auto; accent-color:var(--accent)">
         Скрыть слайд «Уроки медитации»
       </label>
-      <div class="field-hint">Слайд добавляется в конец автоматически на неделях с воскресной КМ. Галочка — не показывать его в этом деке.</div>
+      <div class="field-status">✓ Авто · только на неделях с воскресной КМ</div>
     </div>
   </div>
 </div>
