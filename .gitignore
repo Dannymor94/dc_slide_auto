@@ -46,6 +46,14 @@ deck/manifest.json
 #    webp deliverables are tracked (deck ships them; deploy carries them). ──
 deck/assets/songs/*.png
 
+# ── Self-hosted OCR runtime (Tesseract.js): vendor only what the browser fetches
+#    (loaders + *.wasm.js cores + gzip traineddata). These are regenerable by
+#    build/setup_ocr.sh and are NOT fetched at runtime — keep them out of git:
+#      *.wasm            → base64-embedded inside the sibling *.wasm.js, never fetched
+#      langs/*.traineddata → CLI-only; the browser fetches the .gz (gzip default) ──
+deck/assets/ocr/*.wasm
+deck/assets/ocr/langs/*.traineddata
+
 # ── Build runtime state (Mac-side): song numbers already alerted (idempotency) ──
 build/alerted_songs.json
 
