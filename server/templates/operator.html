@@ -106,8 +106,8 @@
   .header {
     background: var(--bg-card);
     border-bottom: 1px solid rgba(var(--accent-rgb),0.18);
-    padding: 0.85rem 1.2rem;
-    display: flex; align-items: center; gap: 0.7rem;
+    padding: 0.7rem 1.2rem;
+    display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;
     position: sticky; top: 0; z-index: 100;
   }
   .header-title { flex: 1; min-width: 0; }
@@ -121,6 +121,13 @@
   .save-ind.saved  { color: var(--success); }
   .save-ind.error  { color: var(--danger); }
   .lock-icon { font-size: 1rem; opacity: 0.55; flex-shrink: 0; }
+  .btn-deck {
+    background: none; border: 1px solid rgba(var(--accent-rgb),0.28);
+    border-radius: 6px; color: var(--accent-light); font-size: 0.72rem;
+    font-family: inherit; padding: 0.28rem 0.7rem;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  .btn-deck:hover { background: rgba(var(--accent-rgb),0.10); }
 
   /* ── Sections ────────────────────────────────────────────────────────────── */
   .section { margin: 1rem 0.8rem; border-radius: var(--radius); overflow: hidden; }
@@ -343,7 +350,7 @@
     color: var(--accent-light); font-size: 0.82rem; line-height: 1.4; }
   .top-alert code { background: rgba(var(--shadow-rgb),0.28); padding: 0 0.25rem; border-radius: 4px; font-size: 0.9em; }
   .build-status { margin: 0.2rem 0 0.6rem; padding: 0.5rem 0.8rem; border-radius: 9px; font-size: 0.78rem; }
-  .build-status.ok  { background: rgba(var(--ok-rgb),0.10); border: 1px solid rgba(var(--ok-rgb),0.3); color: var(--ok-text); }
+  .build-status.ok  { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
   .build-status.bad { background: rgba(var(--alert-rgb),0.12); border: 1px solid rgba(var(--alert-rgb),0.35); color: var(--accent-light); }
   .auto-video-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
   .auto-video-row .btn-reset { flex-shrink: 0; }
@@ -394,10 +401,10 @@
     transition: background 0.2s, border-color 0.2s, color 0.2s;
   }
   .save-banner span:first-child { font-size: 1rem; line-height: 1; }
-  .save-banner.idle   { background: rgba(var(--surface-rgb),0.03); border-color: rgba(var(--surface-rgb),0.08); color: var(--text-muted); }
-  .save-banner.saving { background: rgba(var(--accent-rgb),0.12); border-color: rgba(var(--accent-rgb),0.35); color: var(--accent-light); }
-  .save-banner.saved  { background: rgba(var(--success-rgb),0.16); border-color: rgba(var(--success-rgb),0.45); color: var(--success); }
-  .save-banner.error  { background: rgba(var(--danger-rgb),0.16); border-color: rgba(var(--danger-rgb),0.45); color: var(--danger); }
+  .save-banner.idle   { background: transparent; border-color: transparent; color: var(--text-muted); opacity: 0.45; }
+  .save-banner.saving { background: transparent; border-color: transparent; color: var(--text-muted); opacity: 0.7; }
+  .save-banner.saved  { background: rgba(var(--success-rgb),0.08); border-color: rgba(var(--success-rgb),0.2); color: var(--success); opacity: 0.8; }
+  .save-banner.error  { background: rgba(var(--danger-rgb),0.16); border-color: rgba(var(--danger-rgb),0.45); color: var(--danger); opacity: 1; }
   .btn-primary {
     width: 100%; background: var(--accent); color: var(--on-accent);
     border: none; border-radius: var(--radius); font-size: 1rem;
@@ -490,6 +497,7 @@
     <span id="save-icon">☁</span>
     <span id="save-text">авто-сохранение</span>
   </div>
+  <button class="btn-deck" onclick="openDeck()" title="Открыть текущий дек в новой вкладке">▶ Открыть дек</button>
   <div class="theme-sel-wrap">
     <select class="theme-sel" id="theme-sel" onchange="applyTheme(this.value)" title="Тема">
       <option value="warm">◐ Warm</option>
