@@ -173,8 +173,8 @@
   }
   .section-body.hidden { display: none; }
 
-  .section-yours .section-head { border-color: rgba(var(--accent-rgb),0.35); }
-  .section-yours .section-body { border-color: rgba(var(--accent-rgb),0.35); }
+  .section-yours .section-head { border-color: var(--border); }
+  .section-yours .section-body { border-color: var(--border); }
 
   /* ── Sub-sections ────────────────────────────────────────────────────────── */
   .sub-sep { border: none; border-top: 1px solid var(--border); margin: 1.1rem 0; }
@@ -204,7 +204,7 @@
   .prog-list { display: flex; flex-direction: column; gap: 0.45rem; }
 
   .prog-item {
-    background: var(--bg); border: 1px solid rgba(var(--accent-rgb),0.14);
+    background: var(--bg); border: 1px solid var(--border);
     border-radius: 8px;
   }
   .prog-item.uncertain { border-color: rgba(var(--warn-rgb),0.4); background: rgba(var(--warn-rgb),0.04); }
@@ -223,7 +223,7 @@
   .prog-r1 { display: flex; align-items: center; gap: 0.4rem; }
   .prog-time {
     width: 4.7rem; flex-shrink: 0;
-    background: transparent; border: 1px solid rgba(var(--accent-rgb),0.22);
+    background: transparent; border: 1px solid rgba(var(--surface-rgb),0.15);
     border-radius: 5px; color: var(--accent); font-weight: 600;
     font-family: inherit; font-size: 0.85rem;
     padding: 0.25rem 0.4rem; text-align: center; outline: none;
@@ -324,7 +324,7 @@
   }
   .dada-wrap { display: flex; gap: 0.5rem; align-items: flex-start; }
   .dada-wrap textarea {
-    flex: 1; background: var(--bg); border: 1px solid rgba(var(--accent-rgb),0.22);
+    flex: 1; background: var(--bg); border: 1px solid rgba(var(--surface-rgb),0.15);
     border-radius: 8px; color: var(--text); font-family: inherit; font-size: 0.82rem;
     padding: 0.5rem 0.7rem; outline: none; resize: vertical; min-height: 52px;
   }
@@ -339,7 +339,7 @@
   /* ── Готово ──────────────────────────────────────────────────────────────── */
   .btn-done {
     width: 100%; margin-top: 1.2rem;
-    background: var(--bg-card); border: 1px solid rgba(var(--accent-rgb),0.25);
+    background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--radius); color: var(--text-muted);
     font-family: inherit; font-size: 0.88rem; padding: 0.65rem;
     cursor: pointer;
@@ -357,7 +357,7 @@
   .mgroup-head {
     font-size: 0.67rem; font-weight: 700; letter-spacing: 0.07em;
     text-transform: uppercase; color: var(--text-muted);
-    margin: 0 0 0.55rem; opacity: 0.75;
+    margin: 0 0 0.55rem; opacity: 0.85;
   }
   .manual-group .flabel:first-of-type { margin-top: 0; }
   .mgroup-head + .bar-wrap { margin-top: 0; }
@@ -366,7 +366,7 @@
     display: block; font-size: 0.78rem; color: var(--text-muted); margin: 1rem 0 0.3rem;
   }
   input[type=text], input[type=url], input[type=number] {
-    width: 100%; background: var(--bg); border: 1px solid rgba(var(--accent-rgb),0.25);
+    width: 100%; background: var(--bg); border: 1px solid rgba(var(--surface-rgb),0.15);
     border-radius: 8px; color: var(--text); font-family: inherit; font-size: 0.92rem;
     padding: 0.55rem 0.8rem; outline: none; transition: border-color 0.15s;
   }
@@ -396,11 +396,10 @@
   }
   .song-cards { display: flex; flex-direction: column; gap: 0.5rem; }
   .song-card {
-    background: var(--bg); border: 1px solid rgba(var(--accent-rgb),0.2);
+    background: var(--bg); border: 1px solid var(--border);
     border-radius: 8px; padding: 0.55rem 0.75rem;
     display: flex; align-items: flex-start; gap: 0.6rem;
   }
-  .song-card.found { border-color: rgba(var(--accent-rgb),0.45); }
   .song-card.stub  { border-color: rgba(var(--danger2-rgb),0.35); }
   .song-card.dragging { opacity: 0.35; }
   .song-card.drag-over { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
@@ -442,10 +441,11 @@
   .btn-primary:active { opacity: 0.82; }
   .btn-secondary {
     flex: 1; background: var(--bg-card); color: var(--text);
-    border: 1px solid rgba(var(--accent-rgb),0.25); border-radius: var(--radius);
+    border: 1px solid var(--border); border-radius: var(--radius);
     font-size: 0.88rem; font-family: inherit; padding: 0.65rem;
     cursor: pointer; text-align: center;
   }
+  .actions .btn-secondary { flex: none; align-self: flex-start; font-size: 0.78rem; padding: 0.38rem 0.8rem; }
   .btn-row { display: flex; gap: 0.7rem; }
 
   /* ── Song picker (choose from catalog) ─────────────────────────────────────── */
@@ -457,7 +457,7 @@
   .picker-overlay.open { display: flex; }
   .picker {
     width: 100%; max-width: 640px; max-height: 85dvh;
-    background: var(--bg-card); border: 1px solid rgba(var(--accent-rgb),0.3);
+    background: var(--bg-card); border: 1px solid rgba(var(--surface-rgb),0.1);
     border-radius: var(--radius) var(--radius) 0 0;
     display: flex; flex-direction: column;
     animation: picker-up 0.2s ease;
