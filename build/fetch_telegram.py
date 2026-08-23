@@ -197,21 +197,29 @@ def fetch_posts(days: int | None = None, finance_days: int | None = None) -> dic
                 # newest-first; stop once past the wider (finance) window
                 if msg.date and msg.date < finance_cutoff:
                     break
-                if sender_id is not None and msg.sender_id != sender_id:
-                    continue
                 text = (msg.message or "").strip()
                 if not text:
                     continue
                 in_prog_window = msg.date is not None and msg.date >= program_cutoff
-                if program is None and in_prog_window and is_program_post(text):
-                    program = text          # newest program post, short window only
-                elif finance is None and is_finance_post(text):
-                    finance = text          # newest finance report, month window
+                # Sender filter applies ONLY to program/finance — those are posted
+                # AS the channel. Song numbers come from human MEMBERS (no official
+                # sender), so they are scanned on EVERY post in the window regardless
+                # of who sent them. The operator confirms them in the form anyway.
+                from_channel = sender_id is None or msg.sender_id == sender_id
+                if from_channel:
+                    if program is None and in_prog_window and is_program_post(text):
+                        program = text          # newest program post, short window only
+                    elif finance is None and is_finance_post(text):
+                        finance = text          # newest finance report, month window
                 if songs is None and in_prog_window:
                     nums = extract_song_numbers(text)
                     if nums:
                         songs = nums        # newest post carrying song numbers (weekly)
-                if program and finance:
+                # Exit only when ALL THREE are found — song numbers often arrive from
+                # a member AFTER the channel's program/finance posts, so breaking on
+                # program+finance alone would skip them. songs may stay None (no ПС
+                # this week); then the loop simply runs to the window's date cutoff.
+                if program and finance and songs is not None:
                     break
         return {"connected": True, "program": program, "finance": finance, "songs": songs or []}
     except Exception as e:
