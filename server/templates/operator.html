@@ -154,6 +154,12 @@
     background: rgba(var(--warn-rgb),0.15); color: var(--warn);
     border: 1px solid rgba(var(--warn-rgb),0.3);
   }
+  .badge-neutral-auto {
+    font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.15rem 0.5rem; border-radius: 20px;
+    background: rgba(var(--muted-rgb),0.10); color: var(--text-muted);
+    border: 1px solid rgba(var(--muted-rgb),0.2);
+  }
   .section-head.auto-warn { border-color: rgba(var(--warn-rgb),0.35); }
   .sec-meta { font-size: 0.7rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8rem; }
   .chevron { color: var(--text-muted); font-size: 0.8rem; transition: transform 0.2s; flex-shrink: 0; }
@@ -357,7 +363,7 @@
     color: var(--accent-light); font-size: 0.82rem; line-height: 1.4; }
   .top-alert code { background: rgba(var(--shadow-rgb),0.28); padding: 0 0.25rem; border-radius: 4px; font-size: 0.9em; }
   .build-status { margin: 0.2rem 0 0.6rem; padding: 0.5rem 0.8rem; border-radius: 9px; font-size: 0.78rem; }
-  .build-status.ok  { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+  .build-status.ok  { display: none; }
   .build-status.bad { background: rgba(var(--alert-rgb),0.12); border: 1px solid rgba(var(--alert-rgb),0.35); color: var(--accent-light); }
   .auto-video-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
   .auto-video-row .btn-reset { flex-shrink: 0; }
@@ -408,7 +414,7 @@
     transition: background 0.2s, border-color 0.2s, color 0.2s;
   }
   .save-banner span:first-child { font-size: 1rem; line-height: 1; }
-  .save-banner.idle   { background: transparent; border-color: transparent; color: var(--text-muted); opacity: 0.45; }
+  .save-banner.idle   { display: none; }
   .save-banner.saving { background: transparent; border-color: transparent; color: var(--text-muted); opacity: 0.7; }
   .save-banner.saved  { background: rgba(var(--success-rgb),0.08); border-color: rgba(var(--success-rgb),0.2); color: var(--success); opacity: 0.8; }
   .save-banner.error  { background: rgba(var(--danger-rgb),0.16); border-color: rgba(var(--danger-rgb),0.45); color: var(--danger); opacity: 1; }
@@ -1047,9 +1053,13 @@ function updateAutoStatus() {
     badge.className = 'badge-warn-auto';
     badge.textContent = '⚠ внимание';
     head.classList.add('auto-warn');
-  } else {
+  } else if (s.ts) {
     badge.className = 'badge-ok';
     badge.textContent = '✓ авто';
+    head.classList.remove('auto-warn');
+  } else {
+    badge.className = 'badge-neutral-auto';
+    badge.textContent = 'авто';
     head.classList.remove('auto-warn');
   }
 }
