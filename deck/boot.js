@@ -19,9 +19,9 @@ async function safeFetch(url) {
 // Named theme presets — mirrors operator.html CSS theme tokens adapted to deck vars.
 // Applied on top of theme.json so typography/layout vars from theme.json are preserved.
 const DECK_PRESETS = {
-  warm:     { accent: '#C9773D', accent_light: '#E8A87C', slide_bg: '#14161f', bg_card: '#1E2030', text_main: '#F2EEE6', text_muted: '#9DA3B4', panel_bg: '#1a1c2b', news_panel_bg: '#1a1c2b' },
-  midnight: { accent: '#d98a4e', accent_light: '#eaaa7a', slide_bg: '#0d1018', bg_card: '#141926', text_main: '#eaf0fa', text_muted: '#96a8be', panel_bg: '#1b2233', news_panel_bg: '#1b2233' },
-  charcoal: { accent: '#c9773d', accent_light: '#e8a87c', slide_bg: '#191919', bg_card: '#2e2e2e', text_main: '#e8e6e2', text_muted: '#9a9a94', panel_bg: '#222222', news_panel_bg: '#222222' },
+  warm:     { accent: '#C9773D', accent_light: '#E8A87C', slide_bg: '#14161f', bg_card: '#1E2030', text_main: '#F2EEE6', text_muted: '#9DA3B4', panel_bg: '#1a1c2b' },
+  midnight: { accent: '#d98a4e', accent_light: '#eaaa7a', slide_bg: '#0d1018', bg_card: '#141926', text_main: '#eaf0fa', text_muted: '#96a8be', panel_bg: '#1b2233' },
+  charcoal: { accent: '#c9773d', accent_light: '#e8a87c', slide_bg: '#191919', bg_card: '#2e2e2e', text_main: '#e8e6e2', text_muted: '#9a9a94', panel_bg: '#222222' },
 };
 
 function applyTheme(t) {
