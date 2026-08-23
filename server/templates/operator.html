@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Оператор ДЧ</title>
+<script>try{const t=localStorage.getItem('operator-theme');if(t&&['warm','midnight','charcoal'].includes(t))document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <style>
   :root {
     --accent:       #C9773D;
@@ -35,6 +36,62 @@
     --ok-text:     #8fd6a8;        /* build-status OK text (bright green) */
     --on-accent:   #fff;           /* text on solid accent (primary button) */
   }
+
+  /* ── Theme: Warm Graphite (default — matches :root values exactly) ──────── */
+  :root,
+  :root[data-theme="warm"] {
+    --bg:          #14161f;
+    --bg-card:     #1E2030;
+    --bg-section:  #1a1c2b;
+    --text:        #F2EEE6;
+    --text-muted:  #9DA3B4;
+    --accent:      #C9773D;
+    --accent-light:#E8A87C;
+    --success:     #5aab6c;
+    --warn:        #d4a017;
+    --danger:      #e05c5c;
+    --accent-rgb:  201, 119, 61;
+    --muted-rgb:   157, 163, 180;
+    --info-text:   #78aadd;
+    --ok-text:     #8fd6a8;
+  }
+
+  /* ── Theme: Midnight Copper ──────────────────────────────────────────────── */
+  :root[data-theme="midnight"] {
+    --bg:          #0d1018;
+    --bg-card:     #141926;
+    --bg-section:  #1b2233;
+    --text:        #eaf0fa;
+    --text-muted:  #8090a8;
+    --accent:      #d98a4e;
+    --accent-light:#eaaa7a;
+    --success:     #5aab6c;
+    --warn:        #d4a017;
+    --danger:      #e05c5c;
+    --accent-rgb:  217, 138, 78;
+    --muted-rgb:   128, 144, 168;
+    --info-text:   #7ab2e4;
+    --ok-text:     #8fd6a8;
+  }
+
+  /* ── Theme: Soft Charcoal ────────────────────────────────────────────────── */
+  :root[data-theme="charcoal"] {
+    --bg:          #191919;
+    --bg-card:     #262626;
+    --bg-section:  #222222;
+    --text:        #e8e6e2;
+    --text-muted:  #9a9a94;
+    --accent:      #c9773d;
+    --accent-light:#e8a87c;
+    --success:     #5aab6c;
+    --warn:        #d4a017;
+    --danger:      #e05c5c;
+    --accent-rgb:  201, 119, 61;
+    --muted-rgb:   154, 154, 148;
+    --info-text:   #78aadd;
+    --ok-text:     #8fd6a8;
+  }
+
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg); color: var(--text);
@@ -399,6 +456,16 @@
   .picker-transl { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.1rem; }
   .picker-added-lbl { font-size: 0.66rem; color: var(--success); flex-shrink: 0; white-space: nowrap; }
   .picker-empty { padding: 1.6rem 1rem; text-align: center; color: var(--text-muted); font-size: 0.85rem; font-style: italic; line-height: 1.6; }
+
+  /* ── Theme selector ──────────────────────────────────────────────────────── */
+  .theme-sel {
+    background: transparent; border: 1px solid rgba(var(--accent-rgb),0.2);
+    border-radius: 6px; color: var(--text-muted); font-size: 0.65rem;
+    font-family: inherit; padding: 0.22rem 0.45rem;
+    cursor: pointer; outline: none; flex-shrink: 0;
+    appearance: none; -webkit-appearance: none;
+  }
+  .theme-sel:focus { border-color: rgba(var(--accent-rgb),0.45); }
 </style>
 </head>
 <body>
@@ -413,6 +480,11 @@
     <span id="save-icon">☁</span>
     <span id="save-text">авто-сохранение</span>
   </div>
+  <select class="theme-sel" id="theme-sel" onchange="applyTheme(this.value)" title="Тема">
+    <option value="warm">◐ Warm</option>
+    <option value="midnight">◐ Night</option>
+    <option value="charcoal">◐ Ash</option>
+  </select>
   <div class="lock-icon">🔒</div>
 </div>
 
@@ -1655,6 +1727,22 @@ function x(s) {
 }
 function openDeck() { window.open('/', '_blank'); }
 function openPdf()  { window.open('/?print-pdf', '_blank'); }
+
+// ── Theme ──────────────────────────────────────────────────────────────────────
+const VALID_THEMES = ['warm', 'midnight', 'charcoal'];
+function applyTheme(t) {
+  if (!VALID_THEMES.includes(t)) t = 'warm';
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('operator-theme', t); } catch(e) {}
+  const sel = document.getElementById('theme-sel');
+  if (sel) sel.value = t;
+}
+(function initTheme() {
+  let t = 'warm';
+  try { t = localStorage.getItem('operator-theme') || 'warm'; } catch(e) {}
+  if (!VALID_THEMES.includes(t)) t = 'warm';
+  applyTheme(t);
+})();
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
 init();
