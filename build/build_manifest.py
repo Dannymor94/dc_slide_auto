@@ -14,7 +14,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -29,6 +29,49 @@ ROOT = Path(__file__).parent.parent
 MANIFEST_PATH = ROOT / "data" / "manifest.json"
 STATUS_PATH = ROOT / "data" / "last_build_status.json"
 MSK = ZoneInfo("Europe/Moscow")
+
+
+def nearest_sunday(today: date) -> date:
+    """Nearest Sunday on or after today (if today IS Sunday → today)."""
+    return today + timedelta(days=(6 - today.weekday()) % 7)
+
+
+def _iso_week_year(date_str):
+    """(ISO year, ISO week) for a YYYY-MM-DD string, or None on failure."""
+    if not date_str:
+        return None
+    try:
+        ic = date.fromisoformat(date_str).isocalendar()
+        return (ic[0], ic[1])          # (year, week) — isocalendar() is a tuple in py3.9
+    except (ValueError, TypeError):
+        return None
+
+
+def _fetch_selection():
+    """Fetch current selection from the live VPS API. Returns dict or None."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(
+            "https://dc.vnedrum.ru/api/selection", timeout=10
+        ) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        print(f"[warn] fetch_selection: {e}", file=sys.stderr)
+        return None
+
+
+def _parse_date_override():
+    """Read DC_MANIFEST_DATE env or --date CLI arg. Returns ISO string or None."""
+    env = os.environ.get("DC_MANIFEST_DATE")
+    if env:
+        return env
+    argv = sys.argv[1:]
+    for i, arg in enumerate(argv):
+        if arg == "--date" and i + 1 < len(argv):
+            return argv[i + 1]
+        if arg.startswith("--date="):
+            return arg[7:]
+    return None
 
 # ── deploy target (kept here so status.deploy reflects the real rsync) ───────────
 VPS = "root@147.45.251.134"
@@ -54,8 +97,42 @@ def _rsync(local: Path, remote: str) -> None:
 
 def main() -> None:
     manifest = json.loads(MANIFEST_PATH.read_text())
-    status = {"program": None, "money": None, "video": None, "news": None,
-              "urokimeditacii": None, "songs": None, "deploy": None, "ts": None}
+    status = {"date": None, "program": None, "money": None, "video": None, "news": None,
+              "urokimeditacii": None, "songs": None, "video_stale": None,
+              "deploy": None, "ts": None}
+
+    # ── Date: nearest Sunday (auto) or explicit override ──────────────────────────
+    today_msk = datetime.now(MSK).date()
+    nearest_sun = nearest_sunday(today_msk)
+    raw_override = _parse_date_override()
+    if raw_override:
+        try:
+            target_date = date.fromisoformat(raw_override)
+        except ValueError:
+            print(f"[warn] manifest.date: некорректный формат override {raw_override!r} "
+                  f"— использую автоматический {nearest_sun}", file=sys.stderr)
+            target_date = nearest_sun
+            raw_override = None
+    else:
+        target_date = nearest_sun
+
+    old_date = manifest.get("date")
+    if old_date != target_date.isoformat():
+        src = f"override={raw_override}" if raw_override else "авто"
+        print(f"[info] manifest.date: {old_date!r} → {target_date.isoformat()} ({src})",
+              file=sys.stderr)
+        manifest["date"] = target_date.isoformat()
+    else:
+        print(f"[info] manifest.date: без изменений ({target_date.isoformat()})",
+              file=sys.stderr)
+
+    if target_date == nearest_sun:
+        src_label = "override (текущая неделя)" if raw_override else "авто"
+        status["date"] = _ok(f"{target_date} ({src_label})")
+    else:
+        status["date"] = _fail(
+            f"override={target_date} — ожидалось ближайшее вс {nearest_sun}"
+        )
 
     # ── News (Airtable) ──
     try:
@@ -119,7 +196,7 @@ def main() -> None:
             missing = find_new_songs(songs)
         except Exception:
             missing = []
-        status["songs"] = {"suggested": songs, "missing": missing}
+        status["songs"] = {"suggested": songs, "missing": missing, "stale": None}
 
     # ── Dada video (СВАДХЬЯЯ) ──
     try:
@@ -151,6 +228,39 @@ def main() -> None:
         manifest.pop("urokimeditacii", None)
         status["urokimeditacii"] = {"state": "error", "error": str(e)[:180]}   # ❌
         print(f"[warn] urokimeditacii: {e}", file=sys.stderr)
+
+    # ── stale top-level fields: song_numbers / video_url survive across weeks by
+    # design (never expired), so we WARN instead of blanking. Compare
+    # selection.week_date's ISO week to the manifest's target week. ──
+    sel = _fetch_selection()
+    if sel:
+        sel_week = _iso_week_year(sel.get("week_date"))
+        manifest_week = _iso_week_year(manifest.get("date"))
+        is_stale = bool(sel_week and manifest_week and sel_week != manifest_week)
+
+        # song_numbers: no auto-source, empty is worse than old → always warn if set.
+        sel_song_nums = sel.get("song_numbers") or []
+        if status["songs"] is not None and is_stale and sel_song_nums:
+            status["songs"]["stale"] = {
+                "numbers": sel_song_nums,
+                "week_date": sel.get("week_date"),
+            }
+            print(f"[warn] песни: selection.song_numbers={sel_song_nums} "
+                  f"с недели {sel.get('week_date')} (ISO {sel_week}) ≠ "
+                  f"неделя сборки (ISO {manifest_week}) — проверь.", file=sys.stderr)
+
+        # video_url: an EMPTY override self-heals via `||` (falls to fresh auto video),
+        # so we warn ONLY for a NON-EMPTY manual URL lingering from a previous week —
+        # it overrides this week's auto-pulled Dada video.
+        sel_video = (sel.get("video_url") or "").strip()
+        if is_stale and sel_video:
+            status["video_stale"] = {
+                "url": sel_video,
+                "week_date": sel.get("week_date"),
+            }
+            print(f"[warn] видео: ручной selection.video_url={sel_video!r} "
+                  f"с недели {sel.get('week_date')} — перекрывает свежее авто.",
+                  file=sys.stderr)
 
     # ── write manifest ──
     manifest.setdefault("suggested_songs", [])
@@ -185,7 +295,7 @@ def main() -> None:
 
     print("build status: " + " | ".join(
         f"{k}={'ok' if (status.get(k) or {}).get('ok') else '—' if (status.get(k) or {}).get('ok') is None else 'FAIL'}"
-        for k in ("program", "money", "video", "news", "deploy"))
+        for k in ("date", "program", "money", "video", "news", "deploy"))
         + f" | songs={status['songs']} | {status['ts']}", file=sys.stderr)
 
 

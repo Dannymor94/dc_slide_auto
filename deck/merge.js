@@ -1,6 +1,19 @@
 const MORNING_CUTOFF_HOUR = 12;
 const JHA_THRESHOLD = 0.5;  // raised/plan ratio: below → poor, at or above → rich
 
+// ISO year×week number (e.g. 202633) for a "YYYY-MM-DD" string.
+// Used to detect stale selection overrides from a previous ДЧ week.
+function _isoWeekYear(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = d.getDay() || 7;           // 1=Mon … 7=Sun
+  const thu = new Date(d);
+  thu.setDate(d.getDate() + 4 - day);   // nearest Thursday of the ISO week
+  const y = thu.getFullYear();
+  const jan1 = new Date(y, 0, 1);
+  return y * 100 + Math.ceil(((thu - jan1) / 86400000 + 1) / 7);
+}
+
 export const DEFAULT_DADA = 'Наш Дада даст комментарий позже.';
 
 const GREETING_MORNING = 'Пожалуйста, соблюдайте <span class="maunavrata">маунаврату</span> до начала ДЧ';
@@ -9,8 +22,31 @@ const GREETING_MORNING = 'Пожалуйста, соблюдайте <span class
 const JHA_BUBBLE_POOR = 'Поддержите джа!';
 const JHA_BUBBLE_RICH = 'Вы красавчики!';
 
+// Persistent override keys survive across ДЧ weeks (operator sets them once,
+// they stay until explicitly changed). All other override keys are weekly —
+// they expire when selection.week_date moves to a different ISO week.
+// Add new persistent fields here; omitting a field = it expires (safe default).
+const PERSISTENT_OVERRIDE_KEYS = ['featured_news', 'hide_urokimeditacii'];
+
 export function buildEffective(manifest, selection, catalog, songImages = {}) {
-  const ov = selection?.overrides ?? {};
+  // Stale-override guard: if selection.week_date is from a different ISO week than
+  // manifest.date, the operator hasn't opened the form this week yet → expire the
+  // weekly overrides so fresh manifest data (news, program, etc.) shows through.
+  // Persistent fields are kept as-is. song_numbers/video_url/raised/bg_music_url
+  // live at the top level of selection and are never touched by this guard.
+  const _overridesStale = !!manifest.date && !!selection?.week_date
+    && _isoWeekYear(manifest.date) !== _isoWeekYear(selection.week_date);
+  const rawOv = selection?.overrides ?? {};
+  const ov = _overridesStale
+    ? Object.fromEntries(
+        Object.entries(rawOv).filter(([k]) => PERSISTENT_OVERRIDE_KEYS.includes(k))
+      )
+    : rawOv;
+  if (_overridesStale) {
+    console.warn('[merge] overrides stale — selection.week_date', selection.week_date,
+      '≠ manifest.date', manifest.date,
+      '— weekly fields expired, persistent kept:', PERSISTENT_OVERRIDE_KEYS);
+  }
 
   // boundary marker lives in a separate field (overrides.practice_end = "HH:MM"),
   // overlaid onto the active program so it survives manifest rebuilds & never freezes it
@@ -38,9 +74,18 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
   const endIdx = program.findIndex(p => p.is_practice_end);
   const continuation_program = endIdx >= 0 ? program.slice(endIdx + 1) : program;
 
-  // resolve songs: image takes priority over catalog text
-  //   image exists → { image_path }; else catalog text → stanzas; else stub
-  const song_numbers = selection?.song_numbers ?? [];
+  // song numbers: manual pick wins ONLY when fresh (selection edited for THIS ДЧ
+  // week); otherwise the chat's suggested_songs auto-apply. Never blanks — if the
+  // selection is stale/empty AND the chat gave nothing, the old pick is kept
+  // (the build summary warns). Fresh is judged by ISO week, same as overrides.
+  const selSongs = selection?.song_numbers ?? [];
+  const suggestedSongs = manifest.suggested_songs ?? [];
+  const songsFresh = !!manifest.date && !!selection?.week_date
+    && _isoWeekYear(manifest.date) === _isoWeekYear(selection.week_date);
+  const song_numbers = (songsFresh && selSongs.length)
+    ? selSongs                              // deliberate manual pick this week
+    : (suggestedSongs.length ? suggestedSongs   // fresh from chat → auto-apply
+                             : selSongs);        // fallback: keep old, never blank
   const songs = song_numbers.map(n => {
     const image_path = songImages[n] ?? songImages[String(n)];
     if (image_path) return { number: n, image_path };

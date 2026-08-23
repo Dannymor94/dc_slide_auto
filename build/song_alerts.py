@@ -126,6 +126,12 @@ def _um_line(st) -> str:
     s = st.get("state")
     if s == "ok":
         n = st.get("items") or 0
+        # A real meeting post has ≥2 lines (КМ + чаепитие at minimum). fetch_um_meeting
+        # always returns ≥1 (the КМ line), so exactly 1 means only КМ parsed and the
+        # rest was lost — a likely sign the free-form post format drifted. Warn, don't ❌.
+        if n <= 1:
+            return (f"⚠️ Уроки медитации: расписание {n} {_plural_punkt(n)} — "
+                    f"проверь, формат поста мог измениться")
         return f"✅ Уроки медитации: слайд есть (вс {st.get('day')}) · расписание {n} {_plural_punkt(n)}"
     if s == "warn":
         return f"⚠️ Уроки медитации: слайд есть (вс {st.get('day')}) · расписание не найдено"
@@ -134,18 +140,41 @@ def _um_line(st) -> str:
     return "➖ Уроки медитации: воскресной КМ нет — слайд не нужен"
 
 
+def _date_line(st) -> str:
+    """Hard date check: ❌ if manifest.date differs from the nearest Sunday."""
+    if not st:
+        return "⏭ Дата: —"
+    if st.get("ok") is False:
+        return f"❌ ДАТА: {st.get('error') or st.get('value') or '?'}"
+    return f"✅ Дата: {st.get('value') or '?'}"
+
+
 def build_summary_text(status: dict) -> str:
     lines = [f"🔨 Прожиг dc-deck · {status.get('ts') or '—'}",
+             _date_line(status.get("date")),
              _line("Программа", status.get("program")),
              _line("Деньги", status.get("money")),
-             _line("Видео", status.get("video")),
-             _line("Новости", status.get("news")),
-             _um_line(status.get("urokimeditacii"))]
+             _line("Видео", status.get("video"))]
+    # video_url stale: a non-empty manual override from a previous week overrides
+    # this week's fresh auto video. Not ❌ (deck still plays), just a heads-up.
+    vstale = status.get("video_stale")
+    if vstale:
+        lines.append(f"⚠️ Видео: ручной URL с прошлой недели "
+                     f"(week_date={vstale.get('week_date')}) — перекрывает свежее авто")
+    lines += [_line("Новости", status.get("news")),
+              _um_line(status.get("urokimeditacii"))]
     songs = status.get("songs") or {}
     sug, miss = songs.get("suggested") or [], songs.get("missing") or []
+    stale = songs.get("stale")
     if sug:
         tail = (f" · ⚠️ нет в базе: {_nums(miss)}" if miss else " · все в базе")
-        lines.append(f"{'⚠️' if miss else '✅'} Песни: предложены {_nums(sug)}{tail}")
+        lines.append(f"{'⚠️' if miss else '✅'} Песни: {_nums(sug)} из чата (авто){tail}")
+    elif stale:
+        # No chat numbers this build, but selection carries last week's pick →
+        # it will show on the deck as-is (not a break, but likely wrong).
+        nums = ", ".join(f"№{n}" for n in (stale.get("numbers") or []))
+        lines.append(f"⚠️ Песни: {nums} — с прошлой недели "
+                     f"(week_date={stale.get('week_date')}), проверь")
     else:
         lines.append("➖ Песни: из чата не заданы")
     lines.append(_line("Деплой", status.get("deploy")))
@@ -155,7 +184,7 @@ def build_summary_text(status: dict) -> str:
 
 def _build_failed(status: dict) -> bool:
     return any((status.get(k) or {}).get("ok") is False
-               for k in ("program", "money", "video", "news", "deploy"))
+               for k in ("date", "program", "money", "video", "news", "deploy"))
 
 
 # ── orchestrator: Б summary (always) + В traffic-light (always; ⚠️ once) ──────────
