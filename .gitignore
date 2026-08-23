@@ -28,6 +28,8 @@ node_modules/
 
 # ── OS / editor junk ──
 .DS_Store
+server/theme_key
+server/theme_key.tmp
 Thumbs.db
 .idea/
 *.swp

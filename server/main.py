@@ -45,6 +45,8 @@ DIST_DIR = ROOT / "dist"          # prod: Caddy serves song images from here (de
 DATA_DIR = ROOT / "data"
 MANIFEST_PATH = DATA_DIR / "manifest.json"
 THEME_PATH = ROOT / "theme.json"
+THEME_KEY_PATH = pathlib.Path(__file__).parent / "theme_key"
+VALID_THEMES = {"warm", "midnight", "charcoal"}
 SONGS_ASSET_DIR = DECK_DIR / "assets" / "songs"
 SONG_IMAGE_EXTS = ("webp", "png", "jpg")   # priority order
 
@@ -75,6 +77,30 @@ def serve_theme():
     if not THEME_PATH.exists():
         raise HTTPException(404, "theme.json not found")
     return JSONResponse(json.loads(THEME_PATH.read_text()))
+
+# ── Theme key (global, cross-device) ─────────────────────────────────────────
+
+def _read_theme_key() -> str:
+    try:
+        key = THEME_KEY_PATH.read_text().strip()
+        return key if key in VALID_THEMES else "warm"
+    except FileNotFoundError:
+        return "warm"
+
+@app.get("/api/theme-key")
+def get_theme_key():
+    return {"theme": _read_theme_key()}
+
+@app.post("/api/theme-key")
+async def post_theme_key(request: Request, _: str = Depends(require_auth)):
+    body = await request.json()
+    key = body.get("theme", "")
+    if key not in VALID_THEMES:
+        raise HTTPException(400, f"Invalid theme: {key!r}")
+    tmp = THEME_KEY_PATH.with_suffix(".tmp")
+    tmp.write_text(key)
+    os.replace(tmp, THEME_KEY_PATH)
+    return {"theme": key}
 
 # ── API ───────────────────────────────────────────────────────────────────────
 

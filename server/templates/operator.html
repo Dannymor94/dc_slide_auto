@@ -527,7 +527,7 @@
   </div>
   <button class="btn-deck" onclick="openDeck()" title="Открыть текущий дек в новой вкладке">▶ Открыть дек</button>
   <div class="theme-sel-wrap">
-    <select class="theme-sel" id="theme-sel" onchange="applyTheme(this.value)" title="Тема">
+    <select class="theme-sel" id="theme-sel" onchange="onThemeChange(this.value)" title="Тема">
       <option value="warm">◐ Warm</option>
       <option value="midnight">◐ Night</option>
       <option value="charcoal">◐ Ash</option>
@@ -746,12 +746,18 @@ const SAVE_DELAY = 1200;
 async function init() {
   setSave('idle', '☁ авто-сохранение');
   try {
-    [catalog, selection, songImages, buildStatus] = await Promise.all([
+    let serverThemeData;
+    [catalog, selection, songImages, buildStatus, serverThemeData] = await Promise.all([
       fetch('/api/catalog').then(r => r.json()).catch(() => []),
       fetch('/api/selection').then(r => r.json()).catch(() => null),
       fetch('/api/song-images').then(r => r.json()).catch(() => ({})),
       fetch('/api/build-status').then(r => r.json()).catch(() => ({})),
+      fetch('/api/theme-key').then(r => r.json()).catch(() => ({theme: 'warm'})),
     ]);
+    const serverTheme = (serverThemeData && VALID_THEMES.includes(serverThemeData.theme))
+      ? serverThemeData.theme : 'warm';
+    _confirmedTheme = serverTheme;
+    applyTheme(serverTheme); // server is authoritative
   } catch { setSave('error', '✗ нет связи'); }
 
   try {
@@ -1820,6 +1826,8 @@ function openPdf()  { window.open('/?print-pdf', '_blank'); }
 
 // ── Theme ──────────────────────────────────────────────────────────────────────
 const VALID_THEMES = ['warm', 'midnight', 'charcoal'];
+let _confirmedTheme = 'warm';
+
 function applyTheme(t) {
   if (!VALID_THEMES.includes(t)) t = 'warm';
   document.documentElement.setAttribute('data-theme', t);
@@ -1827,11 +1835,30 @@ function applyTheme(t) {
   const sel = document.getElementById('theme-sel');
   if (sel) sel.value = t;
 }
+
+async function onThemeChange(key) {
+  if (!VALID_THEMES.includes(key)) return;
+  const prev = _confirmedTheme;
+  applyTheme(key); // optimistic
+  try {
+    const r = await fetch('/api/theme-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({theme: key}),
+    });
+    if (!r.ok) throw new Error(r.status);
+    _confirmedTheme = key;
+  } catch {
+    applyTheme(prev); // revert to last server-confirmed
+    setSave('error', '✗ тема не сохранена');
+  }
+}
+
 (function initTheme() {
   let t = 'warm';
   try { t = localStorage.getItem('operator-theme') || 'warm'; } catch(e) {}
   if (!VALID_THEMES.includes(t)) t = 'warm';
-  applyTheme(t);
+  applyTheme(t); // fast first paint from cache; overridden by server in init()
 })();
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
