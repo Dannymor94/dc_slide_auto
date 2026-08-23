@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 import psycopg
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +41,7 @@ def require_auth(creds: Optional[HTTPBasicCredentials] = Depends(security)):
 # ── Paths ─────────────────────────────────────────────────────────────────────
 ROOT = pathlib.Path(__file__).parent.parent   # project root
 DECK_DIR = ROOT / "deck"
+DIST_DIR = ROOT / "dist"          # prod: Caddy serves song images from here (dev: absent)
 DATA_DIR = ROOT / "data"
 MANIFEST_PATH = DATA_DIR / "manifest.json"
 THEME_PATH = ROOT / "theme.json"
@@ -207,6 +208,71 @@ async def post_selection(request: Request, _: str = Depends(require_auth)):
         return {"ok": True}
     except Exception as e:
         raise HTTPException(500, str(e))
+
+@app.post("/api/song")
+async def add_song(
+    number: int = Form(...),
+    title: str = Form(...),
+    translation: str = Form(""),
+    image: UploadFile = File(...),
+    _: str = Depends(require_auth),
+):
+    """Operator adds one image-backed Prabhat Samgita to the catalog.
+    Mirrors add_image.sh's dual-write: the picture lands in BOTH deck/assets/songs/
+    (scanned by /api/song-images) and dist/assets/songs/ (served by Caddy in prod),
+    plus a catalog row so it searches/renders like any other song. Refuses to clobber
+    an existing number (seeded text or an image already on disk) — pick a free number."""
+    if number < 1:
+        raise HTTPException(400, "Номер должен быть ≥ 1")
+    title = title.strip()
+    if not title:
+        raise HTTPException(400, "Название не может быть пустым")
+
+    ext = (pathlib.Path(image.filename or "").suffix.lower().lstrip(".")) or "png"
+    if ext == "jpeg":
+        ext = "jpg"
+    if ext not in SONG_IMAGE_EXTS:
+        raise HTTPException(400, f"Формат .{ext} не поддерживается (нужно webp/png/jpg)")
+
+    if get_song_images().get(number):
+        raise HTTPException(409, f"№{number}: картинка уже есть")
+    try:
+        with get_conn() as conn:
+            if conn.execute("SELECT 1 FROM song WHERE number = %s", (number,)).fetchone():
+                raise HTTPException(409, f"№{number} уже в каталоге")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Ошибка БД: {e}")
+
+    data = await image.read()
+    if not data:
+        raise HTTPException(400, "Пустой файл")
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(413, "Картинка больше 15 МБ")
+
+    fname = f"{number}.{ext}"
+    for base in (DECK_DIR, DIST_DIR):
+        if base is DIST_DIR and not DIST_DIR.is_dir():
+            continue   # dev: no dist/, the deck mount serves the image directly
+        songs_dir = base / "assets" / "songs"
+        songs_dir.mkdir(parents=True, exist_ok=True)
+        (songs_dir / fname).write_bytes(data)
+
+    # Image-backed row: no stanzas (the slide uses the picture); title/translation
+    # exist only so the catalog card shows and searches like every other song.
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                "INSERT INTO song (number, title_translit, translation_first_line, stanzas, lang) "
+                "VALUES (%s, %s, %s, '[]'::jsonb, 'translit')",
+                (number, title, translation.strip()),
+            )
+            conn.commit()
+    except Exception as e:
+        raise HTTPException(500, f"Ошибка БД: {e}")
+
+    return {"ok": True, "number": number, "image_path": f"assets/songs/{fname}"}
 
 @app.get("/api/operator", response_class=HTMLResponse)
 def operator_form(request: Request, _: str = Depends(require_auth)):
