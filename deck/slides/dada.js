@@ -8,7 +8,7 @@ export function dadaSlide(effective) {
   </div>
   <div class="dada-photo">
     <div class="dada-photo-fallback">фото<br>Дады<br>assets/dada.jpg</div>
-    <img src="assets/dada.jpg" alt="Дада" onerror="this.remove()">
+    <img src="assets/dada.jpg" alt="Дада" data-img-err="remove">
   </div>
 </section>`;
 }

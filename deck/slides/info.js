@@ -79,7 +79,7 @@ export function infoSlide(effective, mode) {
   // the slide content stays visible (not cinema). tabindex=-1 → never steals arrow keys.
   // Auto-hides on idle in the fullscreen show (like the other menu controls).
   const musicBtn = effective.bg_music_url ? `
-    <button class="info-music-btn" onclick="window.dcToggleBgMusic&&window.dcToggleBgMusic()"
+    <button class="info-music-btn" data-action="toggle-music"
             tabindex="-1" title="Фоновая музыка" aria-label="Фоновая музыка">
       <span class="info-music-ico">▶</span><span class="info-music-lbl">Музыка</span>
     </button>` : '';
@@ -112,7 +112,7 @@ export function infoSlide(effective, mode) {
       </div>
       <div class="qr-wrap">
         <img class="qr-image" src="assets/qr-code.svg" alt="QR"
-             onerror="this.style.visibility='hidden'">
+             data-img-err="hide">
       </div>
     </div>`;
 

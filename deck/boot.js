@@ -61,7 +61,7 @@ function showBanner(msg) {
 async function buildSlides() {
   const [theme, manifest, selection, catalog, songImages, themeKeyData] = await Promise.all([
     safeFetch('theme.json'),
-    safeFetch('manifest.json'),
+    safeFetch(`manifest.json?n=${Date.now()}`),
     safeFetch('/api/selection'),
     safeFetch('/api/catalog'),
     safeFetch('/api/song-images'),
@@ -181,6 +181,12 @@ function buildFilmstrip() {
   });
 
   Reveal.on('slidechanged', updateThumbActive);
+  // Blur any focused element when its slide leaves view: Reveal sets aria-hidden on
+  // inactive sections, and a focused element inside aria-hidden triggers an a11y warning.
+  Reveal.on('slidechanged', ({ previousSlide }) => {
+    const focused = previousSlide?.querySelector(':focus');
+    focused?.blur();
+  });
   updateThumbActive();
   if (Reveal.isReady?.()) Reveal.layout();   // fit the deck above the (now visible) strip
 }
@@ -478,6 +484,24 @@ function setupControls() {
     document.body.classList.toggle('dc-strip-on', stripVisible);
     if (typeof Reveal !== 'undefined' && Reveal.isReady?.()) Reveal.layout();
   };
+
+  // Delegated handlers for data-* attributes injected via innerHTML (slides built dynamically).
+  // Avoids script-src/style-src 'unsafe-inline' — event handler attributes bypass CSP hashes.
+  document.addEventListener('click', e => {
+    const nav = e.target.closest('[data-nav]');
+    if (nav) { nav.dataset.nav === 'prev' ? Reveal.prev() : Reveal.next(); return; }
+    if (e.target.closest('[data-action="toggle-music"]')) {
+      window.dcToggleBgMusic?.();
+    }
+  });
+  // img error fallback: data-img-err="remove|hide|hide-parent"
+  document.addEventListener('error', e => {
+    const img = e.target;
+    if (img.tagName !== 'IMG' || !img.dataset.imgErr) return;
+    if (img.dataset.imgErr === 'remove') img.remove();
+    else if (img.dataset.imgErr === 'hide') img.style.visibility = 'hidden';
+    else if (img.dataset.imgErr === 'hide-parent') img.parentNode.style.visibility = 'hidden';
+  }, true);   // capture: error doesn't bubble
 
   // Play = start the show: enter fullscreen + jump to the first slide.
   document.getElementById('dc-play-btn')?.addEventListener('click', () => { enterFs(); gotoFirst(); });

@@ -148,7 +148,7 @@ export function urokimeditaciiSlide(um, bgMusicUrl) {
       <div class="um-spacer"></div>
       <div class="um-donate">
         <div class="um-qr"><img src="assets/qr-code.svg" alt="QR"
-             onerror="this.parentNode.style.visibility='hidden'"></div>
+             data-img-err="hide-parent"></div>
         <div class="um-donate-txt">
           <div class="um-donate-title">Поддержать проект</div>
           <div class="um-donate-sub">донат по QR · подписаться</div>
@@ -182,7 +182,7 @@ export function urokimeditaciiSlide(um, bgMusicUrl) {
   // shared hidden player via the global dcToggleBgMusic; boot.js keeps it playing here
   // (the um-slide is whitelisted alongside .slide-info). Only rendered when a URL is set.
   const music = bgMusicUrl ? `
-    <button class="info-music-btn" onclick="window.dcToggleBgMusic&&window.dcToggleBgMusic()"
+    <button class="info-music-btn" data-action="toggle-music"
             tabindex="-1" title="Фоновая музыка" aria-label="Фоновая музыка">
       <span class="info-music-ico">▶</span><span class="info-music-lbl">Музыка</span>
     </button>` : '';

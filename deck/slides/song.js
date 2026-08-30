@@ -4,7 +4,7 @@ export function songSlide(song, theme) {
   if (song.image_path) {
     return `<section class="dc-slide slide-song-image">
   <div class="song-image-fallback">№${song.number} — изображение недоступно</div>
-  <img src="${song.image_path}" alt="Прабхат Самгита №${song.number}" onerror="this.remove()">
+  <img src="${song.image_path}" alt="Прабхат Самгита №${song.number}" data-img-err="remove">
 </section>`;
   }
 

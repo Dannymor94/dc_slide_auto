@@ -15,7 +15,10 @@ export function youtubeEmbedUrl(url) {
     // disablekb=1 → the focused player ignores arrow keys (no accidental seeking).
     // playsinline=1 → never take over the screen on iOS.
     // enablejsapi=1 → boot.js drives cinema mode off the player's play/pause events.
-    const p = new URLSearchParams({ rel: '0', fs: '0', disablekb: '1', playsinline: '1', enablejsapi: '1' });
+    // origin matches the host page so YouTube's IFrame API postMessage handshake succeeds.
+    // Without it the player loads but JS commands (play/pause/events) silently no-op.
+    const origin = (typeof location !== 'undefined') ? location.origin : '';
+    const p = new URLSearchParams({ rel: '0', fs: '0', disablekb: '1', playsinline: '1', enablejsapi: '1', ...(origin ? { origin } : {}) });
     // pass the playlist through so it plays in order; a bare playlist (no seed video)
     // uses the videoseries endpoint.
     if (list) {
@@ -54,7 +57,7 @@ export function videoSlide(effective) {
   <div class="dc-label">Видео</div>
   <iframe id="yt-frame-video" class="yt-embed" src="${embed}" allow="autoplay; encrypted-media" tabindex="-1"></iframe>
   <a class="video-fallback" href="${href}" target="_blank" rel="noopener">▶ Открыть видео на YouTube ↗</a>
-  <button class="slide-nav slide-nav-prev" onclick="Reveal.prev()" aria-label="Предыдущий слайд" tabindex="-1">‹</button>
-  <button class="slide-nav slide-nav-next" onclick="Reveal.next()" aria-label="Следующий слайд" tabindex="-1">›</button>
+  <button class="slide-nav slide-nav-prev" data-nav="prev" aria-label="Предыдущий слайд" tabindex="-1">‹</button>
+  <button class="slide-nav slide-nav-next" data-nav="next" aria-label="Следующий слайд" tabindex="-1">›</button>
 </section>`;
 }
