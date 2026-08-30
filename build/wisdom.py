@@ -4,7 +4,9 @@ bounded LLM point (Mac build-side only; the VPS never calls out).
 
 Contract (agreed M2):
   • Groq (primary) → OpenRouter (fallback), OpenAI-compatible chat via requests.
-  • seed = ISO week (perturbed per retry), temperature 0.8, max_tokens ≤ 40.
+  • seed = ISO week (perturbed per retry), temperature 0.8. max_tokens=300 with
+    reasoning_effort=low: Groq's gpt-oss/qwen3 are reasoning models that would
+    otherwise burn a 40-token budget on hidden reasoning and return empty content.
   • NO <hint>/context is passed — the ДЧ program post has nothing about the
     Уроки-медитации КМ, so feeding it would only mislead. Prompt is standalone.
   • Raw output is NEVER trusted: a deterministic validator gates it
@@ -28,6 +30,8 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+from extract_program import _pick_groq_model   # reuse the live /models whitelist picker
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -38,7 +42,12 @@ DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct"
 HISTORY_PATH = Path(__file__).parent / "wisdom_history.json"
 DEDUP_WEEKS = 8            # don't repeat a line used in the last ~8 builds
 HISTORY_KEEP = 30         # trim stored history to the last N entries
-MAX_TOKENS = 40           # per contract (≤40)
+# Reasoning models (Groq gpt-oss, qwen3) spend tokens on a hidden `reasoning`
+# channel BEFORE `content`; at 40 tokens content came back empty → silent fallback.
+# 300 gives reasoning_effort=low headroom; the phrase itself stays short (validator
+# caps 6–14 words / ≤90 chars). Non-reasoning fallback (llama) just stops early.
+MAX_TOKENS = 300
+REASONING_EFFORT = "low"  # minimal thinking; ignored by non-reasoning models
 TEMPERATURE = 0.8
 ATTEMPTS = 3
 
@@ -148,8 +157,12 @@ def _providers() -> list[tuple]:
     provs = []
     gk = os.environ.get("GROQ_API_KEY")
     if gk:
-        provs.append(("Groq", GROQ_URL, gk,
-                      os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL), {}))
+        # env override, else the live /models whitelist picker (llama-3.3-70b-versatile
+        # was retired → 404; picker returns a live instruct model or None → skip Groq,
+        # never a random whisper/guard model).
+        model = os.environ.get("GROQ_MODEL") or _pick_groq_model(gk)
+        if model:
+            provs.append(("Groq", GROQ_URL, gk, model, {}))
     ork = os.environ.get("OPENROUTER_API_KEY")
     if ork:
         provs.append(("OpenRouter", OPENROUTER_URL, ork,
@@ -173,6 +186,7 @@ def _call(url: str, key: str, model: str, seed: int, extra: dict) -> str:
         "model": model,
         "temperature": TEMPERATURE,
         "max_tokens": MAX_TOKENS,
+        "reasoning_effort": REASONING_EFFORT,
         "seed": seed,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -209,39 +223,46 @@ def generate_wisdom(iso_year: int, iso_week: int, *,
 
     chosen = None
     if provs:
+        print(f"[info] wisdom: провайдеры: {', '.join(f'{n}/{m}' for n,_,_,m,_ in provs)}",
+              file=sys.stderr)
         for attempt in range(ATTEMPTS):
             seed = iso_week * 1000 + attempt   # deterministic, varied per retry
-            line = None
+            line = used = None
             for name, url, key, model, extra in provs:
                 try:
                     line = _call(url, key, model, seed, extra)
+                    used = f"{name}/{model}"
                     break
                 except requests.HTTPError as e:
                     r = e.response
                     code = r.status_code if r is not None else "?"
-                    print(f"[warn] wisdom: {name} HTTP {code} — следующий провайдер.",
+                    print(f"[warn] wisdom: {name}/{model} HTTP {code} — следующий провайдер.",
                           file=sys.stderr)
                 except Exception as e:
-                    print(f"[warn] wisdom: {name} ошибка ({e}) — следующий провайдер.",
+                    print(f"[warn] wisdom: {name}/{model} ошибка ({e}) — следующий провайдер.",
                           file=sys.stderr)
             if not line:
                 continue
             ok, reason = validate(line)
             if not ok:
-                print(f"[warn] wisdom: попытка {attempt+1} отклонена ({reason}): {line!r}",
-                      file=sys.stderr)
+                print(f"[warn] wisdom: {used} попытка {attempt+1} отклонена валидатором "
+                      f"({reason}): {line!r}", file=sys.stderr)
                 continue
             if _normalize(line) in recent:
-                print(f"[warn] wisdom: попытка {attempt+1} — дубль недавней, перегенерирую.",
-                      file=sys.stderr)
+                print(f"[warn] wisdom: {used} попытка {attempt+1} — дубль недавней, "
+                      f"дедуп-ретрай.", file=sys.stderr)
                 continue
             chosen = line
-            print(f"[info] wisdom: LLM ок (попытка {attempt+1}): {line!r}", file=sys.stderr)
+            how = "принято с 1-й попытки" if attempt == 0 else f"принято после дедуп-ретрая (попытка {attempt+1})"
+            print(f"[info] wisdom: {used} — {how}: {line!r}", file=sys.stderr)
             break
 
     if chosen is None:
         chosen = _fallback(iso_week, recent)
-        print(f"[info] wisdom: фолбэк-пул (iso_week={iso_week}): {chosen!r}", file=sys.stderr)
+        why = "все провайдеры недоступны/не прошли валидатор" if provs else "нет ключей провайдеров"
+        slot = FALLBACK_POOL.index(chosen) if chosen in FALLBACK_POOL else "?"
+        print(f"[info] wisdom: {why} — фолбэк-пул #{slot} (iso_week={iso_week}): {chosen!r}",
+              file=sys.stderr)
 
     _append_history(history_path, iso_year, iso_week, chosen)
     return chosen

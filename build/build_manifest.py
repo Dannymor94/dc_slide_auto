@@ -101,8 +101,14 @@ def main() -> None:
               "urokimeditacii": None, "songs": None, "video_stale": None,
               "deploy": None, "ts": None}
 
+    # ── Run label: "12:00" or "21:00" (or actual hour for manual/test runs) ─────────
+    now_msk = datetime.now(MSK)
+    run_hour = now_msk.hour
+    run_label = f"{run_hour:02d}:00"
+    status["run"] = run_label
+
     # ── Date: nearest Sunday (auto) or explicit override ──────────────────────────
-    today_msk = datetime.now(MSK).date()
+    today_msk = now_msk.date()
     nearest_sun = nearest_sunday(today_msk)
     raw_override = _parse_date_override()
     if raw_override:
@@ -137,8 +143,23 @@ def main() -> None:
     # ── News (Airtable) ──
     try:
         news = fetch_news()
-        manifest["news"] = news
-        status["news"] = _ok(str(len(news)))
+        if news:
+            manifest["news"] = news
+            status["news"] = _ok(str(len(news)))
+        else:
+            # fetch_news() returns [] both on error AND on genuinely empty window.
+            # If previous manifest already had news, keep it — a transient Airtable
+            # failure on the 21:00 run must not wipe what the 12:00 run gathered.
+            prev_news = manifest.get("news") or []
+            if prev_news:
+                status["news"] = _fail(
+                    f"Airtable вернул 0 новостей — прежние {len(prev_news)} сохранены"
+                )
+                print("[warn] news: fetch_news() вернул [] — прежние новости сохранены (не затираю).",
+                      file=sys.stderr)
+            else:
+                manifest["news"] = []
+                status["news"] = _ok("0")
     except Exception as e:
         status["news"] = _fail(e)
         print(f"[warn] news: {e}", file=sys.stderr)
@@ -161,8 +182,17 @@ def main() -> None:
         if posts["program"]:
             try:
                 prog = extract_program(posts["program"])
-                manifest["program"] = prog
-                status["program"] = _ok(f"{len(prog)} пунктов")
+                if prog:
+                    manifest["program"] = prog
+                    status["program"] = _ok(f"{len(prog)} пунктов")
+                else:
+                    # LLM returned empty list (all providers down or parse failed) →
+                    # keep the previous manifest program intact, report as failure
+                    status["program"] = _fail(
+                        "LLM вернул пустую программу — прежняя сохранена"
+                    )
+                    print("[warn] program: LLM вернул [] — прежняя программа сохранена (не затираю).",
+                          file=sys.stderr)
             except Exception as e:
                 status["program"] = _fail(e)
                 print(f"[warn] extract_program: {e}", file=sys.stderr)
@@ -186,8 +216,11 @@ def main() -> None:
                 status["money"] = _fail(e)
                 print(f"[warn] extract_progress: {e}", file=sys.stderr)
         else:
-            manifest["raised"], manifest["plan"] = None, None
-            status["money"] = _fail("пост финансов не найден")
+            # Keep previous raised/plan — same policy as missing program post.
+            # A transient Telethon miss on the 21:00 run must not wipe 12:00 data.
+            status["money"] = _fail("пост финансов не найден — прежние суммы сохранены")
+            print("[warn] money: пост финансов не найден — raised/plan не затираю.",
+                  file=sys.stderr)
 
         # song numbers (regex, no LLM)
         songs = posts.get("songs", [])
@@ -201,8 +234,21 @@ def main() -> None:
     # ── Dada video (СВАДХЬЯЯ) ──
     try:
         vid = fetch_dada_video()
-        manifest["video_url"] = vid["video_url"]
-        status["video"] = _ok(vid["video_url"] or "—")
+        new_url = vid["video_url"]
+        if new_url:
+            manifest["video_url"] = new_url
+            status["video"] = _ok(new_url)
+        else:
+            # Keep previous URL — a missed Telegram post on the 21:00 run must not
+            # blank a URL the 12:00 run successfully fetched.
+            prev_url = manifest.get("video_url") or ""
+            if prev_url:
+                status["video"] = _fail("видео не найдено — прежний URL сохранён")
+                print("[warn] video: video_url=None — прежний URL сохранён (не затираю).",
+                      file=sys.stderr)
+            else:
+                manifest["video_url"] = None
+                status["video"] = _ok("—")
     except Exception as e:
         status["video"] = _fail(e)
         print(f"[warn] video: {e}", file=sys.stderr)

@@ -150,7 +150,9 @@ def _date_line(st) -> str:
 
 
 def build_summary_text(status: dict) -> str:
-    lines = [f"🔨 Прожиг dc-deck · {status.get('ts') or '—'}",
+    run = status.get("run") or ""
+    run_tag = f" [{run}]" if run else ""
+    lines = [f"🔨 Прожиг dc-deck{run_tag} · {status.get('ts') or '—'}",
              _date_line(status.get("date")),
              _line("Программа", status.get("program")),
              _line("Деньги", status.get("money")),
