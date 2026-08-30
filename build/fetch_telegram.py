@@ -125,9 +125,29 @@ def _config() -> dict | None:
     }
 
 
+# A real ДЧ program yields ≥ this many «HH:MM — Название» items. Data-picked:
+# across 400 days the minimum real post had 2 items (Сбор + ДЧ), every noise post
+# (prose, train schedule, bot post) parsed to 0 — clean separation at 2. See the
+# threshold run. Raise only if a real post ever proves smaller (worse to miss one).
+PROGRAM_MIN_ITEMS = 2
+
+
 def is_program_post(text: str) -> bool:
+    """STRUCTURAL detector: a program post is one parse_program() reads ≥N items
+    from — same function that builds the schedule, so trigger and classifier can't
+    diverge (the УМ slide taught us that lesson). Keyword match alone is not enough:
+    prose «встречаемся в 10 в джагрити» has a time and a keyword but no schedule."""
+    from extract_program import parse_program   # local import: avoid import cycle at module load
+    n = len(parse_program(text))
+    if n >= PROGRAM_MIN_ITEMS:
+        return True
+    # Drift signal: looked program-like (time + keyword, the OLD heuristic) yet
+    # parsed structurally short. Logged so a future format drift is visible, not silent.
     t = text.lower()
-    return bool(_TIME_RE.search(text)) and any(k in t for k in _PROGRAM_KEYS)
+    if _TIME_RE.search(text) and any(k in t for k in _PROGRAM_KEYS):
+        print(f"[info] is_program_post: пост похож на программу (время+ключевое слово), "
+              f"но структурно отвергнут — пунктов={n} < {PROGRAM_MIN_ITEMS}.", file=sys.stderr)
+    return False
 
 
 def is_finance_post(text: str) -> bool:
