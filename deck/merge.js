@@ -55,7 +55,6 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
     ...p, is_practice_end: !!practice_end && p.time === practice_end,
   }));
   const today = new Date().toISOString().slice(0, 10);
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   // Try to parse a Russian date ("14 ноября") from a bare override string.
   // Used so manually-entered news obeys the same since-filter as manifest items.
   const _RU_MON = ['янв','фев','мар','апр','ма','июн','июл','авг','сен','окт','ноя','дек'];
@@ -69,12 +68,8 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
   }
   function _newsDate(n) { return typeof n === 'object' ? (n.since ?? null) : _guessDate(n.text ?? n); }
   const manifestNews = (ov.news ?? manifest.news ?? [])
-    .filter(n => { const d = _newsDate(n); return !d || d >= yesterday; })
-    .map(n => {
-      const text = n.text ?? n;
-      const since = _newsDate(n);
-      return (since && since < today) ? { text, past: true } : text;
-    });
+    .filter(n => { const d = _newsDate(n); return !d || d >= today; })
+    .map(n => n.text ?? n);
   const news = [...manifestNews, ...(ov.news_manual ?? [])];
   // featured_news: manual-only accent block, separate from news / news_manual.
   // Lives in selection.overrides → survives manifest rebuild. Empty → block hidden.

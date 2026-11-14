@@ -12,11 +12,7 @@ function newsList(news) {
   if (!news || news.length === 0) {
     return '<p class="news-panel-empty">Нет событий</p>';
   }
-  return `<ul class="news-panel-list">${news.map(n => {
-    const text = typeof n === 'object' ? n.text : n;
-    const cls = (typeof n === 'object' && n.past) ? ' class="news-item-past"' : '';
-    return `<li${cls}>${text}</li>`;
-  }).join('')}</ul>`;
+  return `<ul class="news-panel-list">${news.map(n => `<li>${n}</li>`).join('')}</ul>`;
 }
 
 // Accent block for hand-picked important news. No caption — just a visually
