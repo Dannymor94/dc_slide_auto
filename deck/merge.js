@@ -56,12 +56,24 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
   }));
   const today = new Date().toISOString().slice(0, 10);
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  // Try to parse a Russian date ("14 ноября") from a bare override string.
+  // Used so manually-entered news obeys the same since-filter as manifest items.
+  const _RU_MON = ['янв','фев','мар','апр','ма','июн','июл','авг','сен','окт','ноя','дек'];
+  function _guessDate(text) {
+    const m = text.match(/(\d{1,2})\s+([а-яё]+)/i);
+    if (!m) return null;
+    const mon = _RU_MON.findIndex(p => m[2].toLowerCase().startsWith(p));
+    if (mon < 0) return null;
+    const yr = new Date().getFullYear();
+    return `${yr}-${String(mon + 1).padStart(2, '0')}-${String(parseInt(m[1])).padStart(2, '0')}`;
+  }
+  function _newsDate(n) { return typeof n === 'object' ? (n.since ?? null) : _guessDate(n.text ?? n); }
   const manifestNews = (ov.news ?? manifest.news ?? [])
-    .filter(n => !n.since || n.since >= yesterday)
+    .filter(n => { const d = _newsDate(n); return !d || d >= yesterday; })
     .map(n => {
       const text = n.text ?? n;
-      const past = typeof n === 'object' && n.since && n.since < today;
-      return past ? { text, past: true } : text;
+      const since = _newsDate(n);
+      return (since && since < today) ? { text, past: true } : text;
     });
   const news = [...manifestNews, ...(ov.news_manual ?? [])];
   // featured_news: manual-only accent block, separate from news / news_manual.
