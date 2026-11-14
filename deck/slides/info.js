@@ -1,7 +1,7 @@
-function programItems(items) {
+function programItems(items, strikeCount = 0) {
   if (!items || items.length === 0) return '<p class="dc-stub">Программа не задана</p>';
-  return items.map(p => `
-    <div class="program-item">
+  return items.map((p, i) => `
+    <div class="program-item${i < strikeCount ? ' program-item--strike-out' : ''}">
       <span class="time">${p.time}</span>
       <span class="prog-title">${p.title}</span>
       ${p.note ? `<div class="prog-note">${p.note}</div>` : ''}
@@ -12,7 +12,11 @@ function newsList(news) {
   if (!news || news.length === 0) {
     return '<p class="news-panel-empty">Нет событий</p>';
   }
-  return `<ul class="news-panel-list">${news.map(n => `<li>${n}</li>`).join('')}</ul>`;
+  return `<ul class="news-panel-list">${news.map(n => {
+    const text = typeof n === 'object' ? n.text : n;
+    const cls = (typeof n === 'object' && n.past) ? ' class="news-item-past"' : '';
+    return `<li${cls}>${text}</li>`;
+  }).join('')}</ul>`;
 }
 
 // Accent block for hand-picked important news. No caption — just a visually
@@ -89,7 +93,7 @@ export function infoSlide(effective, mode) {
     <div class="info-left">
       ${greetingPanel}
       <div class="info-program-label">${programLabel}</div>
-      <div class="info-program-items">${programItems(items)}</div>
+      <div class="info-program-items">${programItems(items, isOpening ? 0 : 2)}</div>
       ${footerBar}
       ${progressPanel(effective.raised, effective.plan)}
     </div>`;

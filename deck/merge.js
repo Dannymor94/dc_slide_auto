@@ -54,7 +54,16 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
   const program = (ov.program ?? manifest.program ?? []).map(p => ({
     ...p, is_practice_end: !!practice_end && p.time === practice_end,
   }));
-  const news = [...(ov.news ?? manifest.news ?? []), ...(ov.news_manual ?? [])];
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const manifestNews = (ov.news ?? manifest.news ?? [])
+    .filter(n => !n.since || n.since >= yesterday)
+    .map(n => {
+      const text = n.text ?? n;
+      const past = typeof n === 'object' && n.since && n.since < today;
+      return past ? { text, past: true } : text;
+    });
+  const news = [...manifestNews, ...(ov.news_manual ?? [])];
   // featured_news: manual-only accent block, separate from news / news_manual.
   // Lives in selection.overrides → survives manifest rebuild. Empty → block hidden.
   const featured_news = ov.featured_news ?? [];
@@ -74,18 +83,14 @@ export function buildEffective(manifest, selection, catalog, songImages = {}) {
   const endIdx = program.findIndex(p => p.is_practice_end);
   const continuation_program = endIdx >= 0 ? program.slice(endIdx + 1) : program;
 
-  // song numbers: manual pick wins ONLY when fresh (selection edited for THIS ДЧ
-  // week); otherwise the chat's suggested_songs auto-apply. Never blanks — if the
-  // selection is stale/empty AND the chat gave nothing, the old pick is kept
-  // (the build summary warns). Fresh is judged by ISO week, same as overrides.
+  // song numbers: suggested_songs from Telegram are primary — when the chat post
+  // has songs, they win. Manual selection (operator form) is the fallback when
+  // the manifest has no suggestions yet. Never blanks.
   const selSongs = selection?.song_numbers ?? [];
   const suggestedSongs = manifest.suggested_songs ?? [];
-  const songsFresh = !!manifest.date && !!selection?.week_date
-    && _isoWeekYear(manifest.date) === _isoWeekYear(selection.week_date);
-  const song_numbers = (songsFresh && selSongs.length)
-    ? selSongs                              // deliberate manual pick this week
-    : (suggestedSongs.length ? suggestedSongs   // fresh from chat → auto-apply
-                             : selSongs);        // fallback: keep old, never blank
+  const song_numbers = suggestedSongs.length
+    ? suggestedSongs                        // Telegram chat → primary
+    : selSongs;                             // manual/fallback, never blank
   const songs = song_numbers.map(n => {
     const image_path = songImages[n] ?? songImages[String(n)];
     if (image_path) return { number: n, image_path };
