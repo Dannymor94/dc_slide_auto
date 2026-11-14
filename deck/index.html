@@ -279,11 +279,11 @@
     .news-panel-list li  { font-size: 1rem; line-height: 1.4; padding: 0.32rem 0; }
     .news-panel-list li:not(:last-child) { border-bottom: 1px solid rgba(18,20,31,0.07); }
     .news-panel-empty    { font-size: 0.88rem; color: rgba(18,20,31,0.45); font-style: italic; }
-    .news-item-past { position: relative; max-height: 4em; overflow: hidden;
-                      animation: news-past-shrink 0.5s 2.5s ease forwards; }
+    .news-item-past { position: relative; max-height: 4em; overflow: hidden; }
+    .news-item-past.news-anim { animation: news-past-shrink 0.5s 2.5s ease forwards; }
     .news-item-past::after { content: ''; position: absolute; left: 0; top: 50%;
-                             height: 2px; width: 0; background: currentColor;
-                             animation: news-past-strike 0.4s 1s ease forwards; }
+                             height: 2px; width: 0; background: currentColor; }
+    .news-item-past.news-anim::after { animation: news-past-strike 0.4s 1s ease forwards; }
     @keyframes news-past-strike { to { width: 100%; } }
     @keyframes news-past-shrink { to { opacity: 0; max-height: 0; padding: 0; margin: 0; } }
 

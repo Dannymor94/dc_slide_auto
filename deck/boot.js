@@ -118,7 +118,10 @@ async function buildSlides() {
     hash: true, transition: 'fade', controls: false, progress: false,
     keyboard: { 191: null, 70: null },   // disable Reveal's own "/" help and F (we toggle F ourselves)
   };
-  const onRevealReady = () => Reveal.initialize(revealCfg).then(() => { buildFilmstrip(); setupCinema(); setupBgMusic(effective.bg_music_url); });
+  const onRevealReady = () => Reveal.initialize(revealCfg).then(() => {
+    buildFilmstrip(); setupCinema(); setupBgMusic(effective.bg_music_url);
+    document.querySelectorAll('.news-item-past').forEach(el => el.classList.add('news-anim'));
+  });
   if (typeof Reveal !== 'undefined') {
     onRevealReady();
   } else {
