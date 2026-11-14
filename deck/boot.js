@@ -120,7 +120,10 @@ async function buildSlides() {
   };
   const onRevealReady = () => Reveal.initialize(revealCfg).then(() => {
     buildFilmstrip(); setupCinema(); setupBgMusic(effective.bg_music_url);
-    document.querySelectorAll('.news-item-past').forEach(el => el.classList.add('news-anim'));
+    document.querySelectorAll('.news-item-past').forEach(el => {
+      setTimeout(() => el.classList.add('news-strike'), 1000);
+      setTimeout(() => el.classList.add('news-gone'), 2500);
+    });
   });
   if (typeof Reveal !== 'undefined') {
     onRevealReady();
